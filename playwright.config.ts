@@ -11,7 +11,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run db:local && npm run dev",
+    command: "npx tsx tests/e2e/server.ts",
     url: "http://127.0.0.1:8787",
     reuseExistingServer: false,
     timeout: 120000,

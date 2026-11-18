@@ -1,9 +1,19 @@
+import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 test("recorrido móvil: borrador privado, ordenar, destacar, publicar y copiar", async ({
   page,
   browser,
   context,
 }) => {
+  const token = await readFile(".wrangler/e2e/editor-token", "utf8");
+  await page.route("**/admin**", (route) =>
+    route.continue({
+      headers: {
+        ...route.request().headers(),
+        "Cf-Access-Jwt-Assertion": token,
+      },
+    }),
+  );
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const date = `20${String(30 + Math.floor(Math.random() * 60))}-11-${String(1 + Math.floor(Math.random() * 27)).padStart(2, "0")}`;
   await page.goto("/admin");
@@ -49,6 +59,10 @@ test("recorrido móvil: borrador privado, ordenar, destacar, publicar y copiar",
     isMobile: true,
   });
   const publicPage = await anon.newPage();
+  expect((await anon.request.get("/admin")).status()).toBe(401);
+  expect(
+    (await anon.request.post("/admin/publish", { data: {} })).status(),
+  ).toBe(401);
   const draft = await publicPage.goto(`/dia/${date}`);
   expect(draft?.status()).toBe(404);
   expect(await (await anon.request.get("/sitemap.xml")).text()).not.toContain(
@@ -98,6 +112,19 @@ test("recorrido móvil: borrador privado, ordenar, destacar, publicar y copiar",
     path: "test-results/mobile-public.png",
     fullPage: true,
   });
+  expect(
+    await publicPage.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await publicPage.screenshot({
+    path: test.info().outputPath("public-mobile.png"),
+    fullPage: true,
+  });
+  await page.screenshot({
+    path: test.info().outputPath("admin-mobile.png"),
+    fullPage: true,
+  });
   await publicPage.getByRole("link", { name: "Jugadas", exact: true }).click();
   await expect(publicPage.locator("article")).toHaveCount(1);
   await page.getByLabel("Título de la edición").fill("CAMBIO PRIVADO");
@@ -121,6 +148,8 @@ test("controles de escritura y XSS en el navegador móvil", async ({
   page,
   request,
 }) => {
+  const token = await readFile(".wrangler/e2e/editor-token", "utf8");
+  const auth = { "Cf-Access-Jwt-Assertion": token };
   const edition = {
     date: "2099-10-01",
     title: "<img src=x onerror=alert(1)>",
@@ -139,17 +168,19 @@ test("controles de escritura y XSS en el navegador móvil", async ({
       },
     ],
   };
-  const saved = await request.get("/admin/data?date=" + edition.date);
+  const saved = await request.get("/admin/data?date=" + edition.date, {
+    headers: auth,
+  });
   const revision = saved.ok() ? (await saved.json()).revision : 0;
   for (const origin of ["https://evil.example", "null"]) {
     const r = await request.post("/admin/publish", {
-      headers: { Origin: origin },
+      headers: { ...auth, Origin: origin },
       data: { edition, revision },
     });
     expect(r.status()).toBe(403);
   }
   const invalid = await request.post("/admin/save", {
-    headers: { Origin: "http://127.0.0.1:8787" },
+    headers: { ...auth, Origin: "http://127.0.0.1:8787" },
     data: {
       edition: {
         ...edition,
@@ -160,7 +191,7 @@ test("controles de escritura y XSS en el navegador móvil", async ({
   });
   expect(invalid.status()).toBe(400);
   const published = await request.post("/admin/publish", {
-    headers: { Origin: "http://127.0.0.1:8787" },
+    headers: { ...auth, Origin: "http://127.0.0.1:8787" },
     data: { edition, revision },
   });
   expect(published.status()).toBe(200);

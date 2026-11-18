@@ -53,7 +53,7 @@ npm run build
 npm run test:e2e
 ```
 
-Las pruebas de integración ejecutan el Worker y las migraciones con D1 real local en Miniflare; los JWT se firman con claves efímeras y solo el endpoint JWKS se simula. Playwright recorre el editor con viewport móvil, guarda cinco fixtures, verifica privacidad, ordena, publica, copia el post, abre la URL sin sesión de editor y retira el destacado. Los reportes locales se generan en `playwright-report/` y `test-results/`, excluidos de Git. Las pruebas E2E escriben únicamente en D1 local; no hay cambios remotos.
+Las pruebas de integración ejecutan el Worker y las migraciones con D1 real local en Miniflare; los JWT se firman con claves efímeras y solo el endpoint JWKS se simula. Playwright ejecuta la entrada de producción con JWT efímeros y D1 local, comprueba que una sesión anónima no accede al panel y recorre el editor con viewport móvil, guarda cinco fixtures, verifica privacidad, ordena, publica, copia el post, abre la URL sin sesión de editor y retira el destacado. Los reportes locales se generan en `playwright-report/` y `test-results/`, excluidos de Git. Las pruebas E2E escriben únicamente en D1 local; no hay cambios remotos.
 
 Pendiente antes de una publicación real: configurar dominio/D1/Access, comprobar el acceso desde Cloudflare, revisión humana de fuentes y derechos, y verificación visual en dispositivo. No hay analítica, formularios de contacto ni cookies propias. Twitch aplica sus políticas cuando se abre una fuente externa.
 
