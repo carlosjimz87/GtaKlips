@@ -234,9 +234,21 @@ test("móvil estrecho conserva la fuente y móvil amplio requiere toque; fallo c
     await page.locator(".hero-preview [data-preview-toggle]").tap();
     const card = page.locator("#clip-PreviewClip0");
     await card.scrollIntoViewIfNeeded();
-    await card.locator("[data-preview-toggle]").tap();
+    const toggle = card.locator("[data-preview-toggle]");
+    const offsetBefore = await toggle.evaluate(
+      (el) =>
+        el.getBoundingClientRect().top -
+        el.closest("article")!.getBoundingClientRect().top,
+    );
+    await toggle.tap();
     await assertFrame(ctx, "#clip-PreviewClip0");
-    await card.locator("[data-preview-toggle]").tap();
+    const offsetAfter = await toggle.evaluate(
+      (el) =>
+        el.getBoundingClientRect().top -
+        el.closest("article")!.getBoundingClientRect().top,
+    );
+    expect(offsetAfter).toBeCloseTo(offsetBefore, 0);
+    await toggle.tap();
     await expect(page.locator("iframe")).toHaveCount(0);
     await page.locator(".hero-preview").scrollIntoViewIfNeeded();
     await ctx.route("https://clips.twitch.tv/embed?**", (route) =>

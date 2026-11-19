@@ -380,6 +380,7 @@ button:focus-visible {
 @media (prefers-reduced-motion:reduce) { .catalog-card,.play-disc,.genre-card img { transition: none !important; } html { scroll-behavior: auto; } }
 
 /* Official clip players occupy their own unobscured space. */
+
 .public-page .billboard { flex-wrap: wrap; gap: 24px; padding-right: clamp(20px,4.5vw,80px); }
 .billboard-content { flex: 1 1 480px; width: auto; max-width: 820px; }
 .hero-preview { flex: 1 1 420px; min-width: 0; max-width: 640px; margin: 32px 0 60px; border: 1px solid #343b42; border-radius: 8px; background: #11151b; overflow: hidden; }
@@ -399,9 +400,9 @@ button:focus-visible {
 .public-page .catalog-card.previewing { flex-basis: 432px; }
 .catalog-card .preview-stage { height: 300px; }
 .public-page .catalog-card { display: flex; flex-direction: column; }
-.catalog-card.previewing .preview-stage { order: 0; }
-.catalog-card.previewing .preview-toolbar { order: 1; }
-.catalog-card.previewing .clip-link { order: 2; }
+.catalog-card .preview-toolbar { order: 0; align-items: flex-start; }
+.catalog-card .preview-stage { order: 1; }
+.catalog-card .clip-link { order: 2; }
 
 .catalog-card.previewing .clip-link .poster { display: none; }
 @media (max-width:1100px) { .hero-preview { flex-basis: 100%; margin: 0 0 40px clamp(20px,4.5vw,80px); }.billboard-content { max-width: none; padding-bottom: 12px; } }
