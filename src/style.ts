@@ -118,6 +118,7 @@ button {
   border: 1px solid #343942;
   border-radius: 16px;
   scroll-margin-top: 20px;
+  overflow-wrap: anywhere;
 }
 .clip.featured {
   border-color: var(--lime);
@@ -256,4 +257,8 @@ button:focus-visible {
     font-size: 23px;
   }
 }
+
+.candidate .toolbar { display: flex; flex-wrap: wrap; }
+.candidate .toolbar button { flex: 1 0 auto; white-space: nowrap; overflow-wrap: normal; }
+.import-run { margin-bottom: 1rem; }
 `;

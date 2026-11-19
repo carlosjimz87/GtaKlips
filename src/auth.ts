@@ -1,6 +1,9 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 export interface Env {
   DB: D1Database;
+  TWITCH_CLIENT_ID?: string;
+  TWITCH_CLIENT_SECRET?: string;
+  TWITCH_GAME_ID?: string;
   PUBLIC_ORIGIN: string;
   ACCESS_ISSUER?: string;
   ACCESS_AUDIENCE?: string;

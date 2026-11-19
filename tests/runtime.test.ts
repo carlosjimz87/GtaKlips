@@ -107,7 +107,13 @@ before(async () => {
       },
     }),
   );
-  const sql = await readFile("migrations/0001_editions.sql", "utf8");
+  const sql = (
+    await Promise.all(
+      ["0001_editions.sql", "0002_twitch.sql"].map((name) =>
+        readFile("migrations/" + name, "utf8"),
+      ),
+    )
+  ).join("\n");
   for (const runtime of [mf, local])
     await (await runtime.getD1Database("DB")).exec(sql.replace(/\n/g, " "));
 });

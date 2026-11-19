@@ -210,3 +210,102 @@ test("controles de escritura y XSS en el navegador móvil", async ({
     ),
   ).toBe(true);
 });
+
+test("importación móvil: fallo seguro, reintento, revisión privada y publicación editorial explícita", async ({
+  page,
+  browser,
+}) => {
+  const token = await readFile(".wrangler/e2e/editor-token", "utf8");
+  await page.route("**/admin**", (route) =>
+    route.continue({
+      headers: {
+        ...route.request().headers(),
+        "Cf-Access-Jwt-Assertion": token,
+      },
+    }),
+  );
+  const anon = await browser.newContext();
+  try {
+    expect((await anon.request.get("/admin/imports")).status()).toBe(401);
+    expect(
+      (await anon.request.post("/admin/import", { data: {} })).status(),
+    ).toBe(401);
+    await page.goto("/admin");
+    await page
+      .getByRole("link", { name: "Importaciones y candidatos" })
+      .click();
+    await page.getByRole("button", { name: "Importar / reintentar" }).click();
+    await expect(
+      page.getByText("Límite de Twitch alcanzado", { exact: false }),
+    ).toBeVisible();
+    await expect(page.locator(".candidate")).toHaveCount(0);
+    await page.getByRole("button", { name: "Importar / reintentar" }).click();
+    await expect(page.locator(".candidate")).toHaveCount(1);
+    await expect(
+      page
+        .locator(".import-run")
+        .first()
+        .getByText("Categoría confirmada en esta ejecución", { exact: false }),
+    ).toBeVisible();
+    await expect(page.locator(".candidate h3")).toHaveText(
+      "Fuente <img src=x> de prueba",
+    );
+    await expect(page.locator("main img, main svg")).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.getByRole("button", { name: "Rechazar", exact: true }).click();
+    await expect(page.locator(".candidate strong")).toHaveText("rejected");
+    await page
+      .getByRole("button", { name: "Seleccionar", exact: true })
+      .click();
+    await expect(page.locator(".candidate strong")).toHaveText("selected");
+    await page.getByRole("button", { name: "Importar / reintentar" }).click();
+    await expect(page.locator(".candidate strong")).toHaveText("selected");
+    await expect(page.locator(".candidate")).toHaveCount(1);
+    await expect(page.locator(".candidate")).toContainText(
+      "30 vistas observadas",
+    );
+    for (const path of ["/", "/archivo", "/sitemap.xml"])
+      expect(await (await anon.request.get(path)).text()).not.toContain(
+        "ImportedJourney",
+      );
+    await page.screenshot({
+      path: test.info().outputPath("import-mobile.png"),
+      fullPage: true,
+    });
+    await page.getByRole("link", { name: "Usar en editor" }).click();
+    await expect(page.getByLabel("URL del clip")).toHaveValue(
+      "https://clips.twitch.tv/ImportedJourney",
+    );
+    await expect(page.getByLabel("Contexto editorial")).toHaveValue("");
+    await page.getByLabel("Fecha editorial").fill("2098-01-02");
+    await page
+      .getByLabel("Título de la edición")
+      .fill("Importación demo con revisión manual");
+    await page
+      .getByLabel("Entradilla")
+      .fill("Fixture de importación: no es metraje verificado.");
+    await page.getByLabel("Gancho aprobado").fill("Prueba editorial manual.");
+    await page.getByLabel("Destacado de la edición").check();
+    await page.getByRole("button", { name: "Publicar edición" }).click();
+    expect((await anon.request.get("/dia/2098-01-02")).status()).toBe(404);
+    await page
+      .getByLabel("Contexto editorial")
+      .fill("Contexto original de demostración escrito por el operador.");
+    await page.getByRole("button", { name: "Guardar borrador" }).click();
+    await expect(page.getByRole("status")).toContainText("Borrador guardado");
+    expect((await anon.request.get("/dia/2098-01-02")).status()).toBe(404);
+    await page.getByRole("button", { name: "Publicar edición" }).click();
+    await expect(page.getByRole("status")).toContainText("Edición publicada");
+    const published = await anon.request.get("/dia/2098-01-02");
+    expect(published.status()).toBe(200);
+    expect(await published.text()).toContain(
+      "Contexto original de demostración escrito por el operador.",
+    );
+  } finally {
+    await anon.close();
+  }
+});

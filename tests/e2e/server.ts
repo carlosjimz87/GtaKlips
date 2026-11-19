@@ -32,6 +32,7 @@ const token = await new SignJWT({})
   .setIssuedAt()
   .setExpirationTime("1h")
   .sign(pair.privateKey);
+let clipRequests = 0;
 const runtime = new Miniflare(
   convertV4MiniflareOptions({
     modules: true,
@@ -44,16 +45,73 @@ const runtime = new Miniflare(
       PUBLIC_ORIGIN: "http://127.0.0.1:8787",
       ACCESS_ISSUER: issuer,
       ACCESS_AUDIENCE: "e2e-editor",
+      TWITCH_CLIENT_ID: "e2e-fixture-client",
+      TWITCH_CLIENT_SECRET: "e2e-fixture-secret",
     },
-    outboundService: () =>
-      new RuntimeResponse(JSON.stringify({ keys: [jwk] }), {
-        headers: { "Content-Type": "application/json" },
-      }),
+    outboundService: async (request) => {
+      const url = new URL(request.url);
+      const reply = (value: unknown, status = 200) =>
+        new RuntimeResponse(JSON.stringify(value), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        });
+      if (url.origin === issuer && url.pathname === "/cdn-cgi/access/certs")
+        return reply({ keys: [jwk] });
+      if (
+        url.href === "https://id.twitch.tv/oauth2/token" &&
+        request.method === "POST"
+      )
+        return reply({
+          access_token: "e2e-fixture-token",
+          token_type: "bearer",
+          expires_in: 3600,
+        });
+      if (
+        url.origin === "https://api.twitch.tv" &&
+        url.pathname === "/helix/games"
+      )
+        return reply({ data: [{ id: "123456", name: "Grand Theft Auto VI" }] });
+      if (
+        url.origin === "https://api.twitch.tv" &&
+        url.pathname === "/helix/clips"
+      ) {
+        clipRequests++;
+        if (clipRequests === 1)
+          return reply({ message: "fixture rate limit" }, 429);
+        return reply({
+          data: [
+            {
+              id: "ImportedJourney",
+              url: "https://clips.twitch.tv/ImportedJourney",
+              broadcaster_name: "Creador importado demo",
+              title: "Fuente <img src=x> de prueba",
+              language: "es",
+              game_id: "123456",
+              created_at: new Date(
+                Date.parse(url.searchParams.get("ended_at")!) - 60000,
+              ).toISOString(),
+              duration: 25,
+              view_count: clipRequests * 10,
+            },
+          ],
+          pagination: {},
+        });
+      }
+      return reply({ error: "Unexpected test outbound request" }, 500);
+    },
   }),
 );
 const db = await runtime.getD1Database("DB");
 await db.exec(
-  (await readFile("migrations/0001_editions.sql", "utf8")).replace(/\n/g, " "),
+  (
+    await Promise.all(
+      ["0001_editions.sql", "0002_twitch.sql"].map((name) =>
+        readFile("migrations/" + name, "utf8"),
+      ),
+    )
+  )
+    .join(" ")
+    .replace(/\n/g, " "),
 );
 await writeFile(".wrangler/e2e/editor-token", token, { mode: 0o600 });
 await runtime.ready;

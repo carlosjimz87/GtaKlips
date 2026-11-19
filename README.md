@@ -1,6 +1,6 @@
 # GtaKlips
 
-Selección editorial de clips de GTA VI en español. Etapa 1: edición manual, borradores privados, publicación, archivo por fecha, filtros, retirada de clips y borrador para X. No importa clips ni publica en redes automáticamente.
+Selección editorial de clips de GTA VI en español. Edición manual, borradores privados, publicación, archivo por fecha, filtros, retirada de clips y borrador para X. La etapa 2 añade importación privada de candidatos de Twitch; su publicación siempre requiere revisión editorial y una acción manual.
 
 ## Desarrollo local
 
@@ -58,3 +58,25 @@ Las pruebas de integración ejecutan el Worker y las migraciones con D1 real loc
 Pendiente antes de una publicación real: configurar dominio/D1/Access, comprobar el acceso desde Cloudflare, revisión humana de fuentes y derechos, y verificación visual en dispositivo. No hay analítica, formularios de contacto ni cookies propias. Twitch aplica sus políticas cuando se abre una fuente externa.
 
 Referencias: [D1](https://developers.cloudflare.com/d1/), [validación de JWT de Access](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/), [plan del producto](plan-gtaklips.md).
+
+## Etapa 2 · Candidatos de Twitch
+
+Desde **Importaciones y candidatos** puedes importar o reintentar, consultar las diez últimas ejecuciones, revisar candidatos y marcarlos pendientes, seleccionados o rechazados. **Usar en editor** abre una edición nueva con fuente, autor y título; requiere escribir contexto propio y publicar manualmente. Importar o seleccionar no modifica las ediciones públicas. La revisión se conserva al actualizar las vistas de un candidato ya conocido.
+
+La integración está preparada, pero **todavía no se ha verificado con Twitch real**: las pruebas usan respuestas controladas e identificadores ficticios. Antes de activarla, registra una aplicación de Twitch y configura `TWITCH_CLIENT_ID` y `TWITCH_CLIENT_SECRET` en el entorno. En desarrollo puedes usar el archivo ignorado `.dev.vars`; en Cloudflare utiliza secretos del Worker. No guardes valores reales en el repositorio, capturas, logs o conversaciones.
+
+`TWITCH_GAME_ID` es opcional. Sin él se consulta el nombre exacto `Grand Theft Auto VI`; con él se verifica que el ID devuelto corresponde exactamente a ese nombre. Si Twitch no devuelve la categoría esperada, se detiene la importación. El panel muestra la categoría confirmada para cada ejecución; no hay un ID real preconfigurado o verificado en este repositorio.
+
+La ventana de consulta abarca las últimas 24 horas UTC. Se solicitan hasta cinco páginas de cien clips, con un máximo de siete solicitudes de proveedor, cinco segundos por solicitud y un MiB por respuesta. Alcanzar el límite o recibir un cursor repetido se registra como resultado parcial. Los contadores de guardado incluyen únicamente páginas confirmadas en D1; un fallo no borra lo importado previamente ni cambia la última edición pública. Los errores se resumen mediante códigos seguros, sin guardar cuerpos de respuesta, tokens o secretos.
+
+La configuración de producción incluye Cron a las **06:00 y 18:00 UTC**, dos veces al día. Ambos eventos llaman al mismo importador que el botón manual. Esta configuración no activa ningún servicio remoto hasta desplegar el Worker y configurar la cuenta. Un bloqueo D1 con caducidad de 60 segundos evita importaciones solapadas; un reintento recupera ejecuciones interrumpidas y rechaza las escrituras de un proceso antiguo.
+
+### Migración y compatibilidad
+
+Aplica también `0002_twitch.sql` antes de ejecutar la etapa 2. Es una migración aditiva: incorpora candidatos, historial y bloqueo, sin modificar la tabla de ediciones. Las pruebas parten de una base con una edición de etapa 1 y comprueban que se conserva. Si hay que volver al código anterior, las tablas añadidas pueden permanecer; conserva una copia de seguridad y evita eliminarlas para no perder historial ni candidatos. Desactiva los nuevos Cron si vuelves a una versión que no incorpora el importador.
+
+### Cobertura adicional
+
+Las pruebas verifican deduplicación y actualización, conservación de la revisión, OAuth y categoría, paginación y resultados parciales, respuestas vacías o malformadas, límites, conexión y tiempo de espera, migración, bloqueo y recuperación, errores de escritura y privacidad. El navegador móvil prueba fallo, reintento, revisión privada y publicación editorial explícita. Las fuentes ficticias no acreditan disponibilidad, permisos ni contenido real. La conexión real con Twitch y la configuración de Cloudflare quedan pendientes hasta disponer de una aplicación y de un destino de despliegue.
+
+Referencias de integración: [Get Clips](https://dev.twitch.tv/docs/api/reference/clips), [Get Games](https://dev.twitch.tv/docs/api/reference/games), [OAuth](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/), [Cron](https://developers.cloudflare.com/workers/runtime-apis/handlers/scheduled/).
