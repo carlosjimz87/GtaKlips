@@ -6,11 +6,13 @@
     "dev": "wrangler dev --config wrangler.local.jsonc --ip 127.0.0.1",
     "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
     "build": "wrangler deploy --dry-run --outdir dist",
     "test:e2e": "playwright test",
     "db:local": "wrangler d1 migrations apply DB --local --config wrangler.local.jsonc",
-    "seed:demo": "node scripts/seed-demo.mjs"
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "bot": "node --env-file=.env.telegram --import tsx src/telegram-runner.ts",
+    "bot:status": "node --env-file=.env.telegram --import tsx src/telegram-runner.ts --status"
   },
   "dependencies": {
     "jose": "^6.1.0"

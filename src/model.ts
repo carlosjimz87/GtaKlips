@@ -1,3 +1,4 @@
+import { source } from "./source";
 export const categories = [
   "Fails",
   "Jugadas",
@@ -5,6 +6,9 @@ export const categories = [
   "Reacciones",
 ] as const;
 export interface Clip {
+  provider?: "twitch" | "youtube" | "x";
+  sourceId?: string;
+  orientation?: "auto" | "landscape" | "portrait";
   thumbnail?: string;
   duration?: number;
   id: string;
@@ -71,6 +75,8 @@ export function thumbnail(value: unknown): string | undefined {
       "static-cdn.jtvnw.net",
       "clips-media-assets2.twitch.tv",
       "clips-media-assets.twitch.tv",
+      "i.ytimg.com",
+      "pbs.twimg.com",
     ].includes(u.hostname) ||
     !/\.(?:jpg|jpeg|png|webp)$/i.test(u.pathname)
   )
@@ -97,7 +103,12 @@ export function validate(v: any, publish = false): Edition {
   )
     throw Error("Fecha o selección no válida (1–10 clips)");
   const clips: Clip[] = v.clips.map((c: any) => {
-    const link = twitch(c.url);
+    const link = source(c.url);
+    if (
+      c.orientation !== undefined &&
+      !["auto", "landscape", "portrait"].includes(c.orientation)
+    )
+      throw Error("URL: orientación no válida");
     const image = thumbnail(c.thumbnail);
     if (
       c.duration !== undefined &&
@@ -110,6 +121,7 @@ export function validate(v: any, publish = false): Edition {
     if (!categories.includes(c.category)) throw Error("Categoría no válida");
     return {
       ...link,
+      ...(c.orientation ? { orientation: c.orientation } : {}),
       ...(image ? { thumbnail: image } : {}),
       ...(c.duration !== undefined ? { duration: c.duration } : {}),
       streamer: str(c.streamer, 80),

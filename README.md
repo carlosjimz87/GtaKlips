@@ -32,13 +32,13 @@ Aplica `migrations/` a la base D1 de destino antes de servir tráfico. Usa siemp
 ## Operación editorial
 
 1. Crea una edición con fecha de Madrid, título, entradilla y gancho para X.
-2. Añade entre 1 y 10 enlaces directos HTTPS de Twitch, crédito del streamer, título, categoría y contexto propio.
+2. Añade entre 1 y 10 enlaces directos HTTPS de Twitch, YouTube o X, crédito del streamer, título, categoría y contexto propio.
 3. Ordena con **Subir/Bajar** y marca exactamente un destacado.
 4. **Guardar borrador** conserva cambios privados. Reabre desde **Ediciones guardadas**.
 5. Para una edición real, desmarca demostración y confirma que revisaste disponibilidad, autoría, contexto, spoilers y duplicados. El producto valida el formato del enlace, no comprueba remotamente el vídeo ni sus derechos.
 6. **Publicar edición** hace visible la instantánea completa, con orden y destacado. **Copiar post** usa esa versión publicada y añade UTM y ancla del destacado. Revisa el texto y publícalo manualmente en X; no hay envío automático. Si el texto excede el límite de tu cuenta, acórtalo al publicarlo.
-7. Abre el enlace público y comprueba las fuentes. El clip se abre en Twitch, no en un reproductor integrado.
-8. Para retirar un clip, abre su edición y utiliza su ID de Twitch. Se conserva el resto; el primer clip restante sustituye al destacado retirado. Si retiras todos, la página permanece con un estado vacío y no se genera un post. La retirada elimina también el clip del borrador en la misma escritura, evitando republicarlo por accidente.
+7. Abre el enlace público y comprueba las fuentes. Puedes abrir la fuente original o usar la vista previa oficial cuando esté disponible.
+8. Para retirar un clip, abre su edición y utiliza su URL original o ID de ficha. Se conserva el resto; el primer clip restante sustituye al destacado retirado. Si retiras todos, la página permanece con un estado vacío y no se genera un post. La retirada elimina también el clip del borrador en la misma escritura, evitando republicarlo por accidente.
 
 La publicación usa una instantánea JSON acotada en una fila D1. Borrador y publicación son columnas independientes. Las escrituras condicionadas por revisión evitan sobrescribir cambios de otra sesión; ante conflicto, recarga y revisa antes de repetir. La selección se actualiza en una operación atómica, nunca clip a clip. No se sirven datos de borrador en rutas públicas ni sitemap; las respuestas no se almacenan en caché.
 
@@ -83,7 +83,7 @@ Referencias de integración: [Get Clips](https://dev.twitch.tv/docs/api/referenc
 
 ## Catálogo visual y demo local
 
-La portada presenta un destacado con reproducción en Twitch, tarjetas con miniaturas, navegación horizontal, filtros por categoría y búsqueda por título, creador o contexto. Las imágenes son opcionales: si faltan o fallan, se conservan la ficha, el crédito y el enlace. Solo se admiten miniaturas HTTPS de los CDN de Twitch especificados por el validador.
+La portada presenta un destacado con reproducción en Twitch, tarjetas con miniaturas, navegación horizontal, filtros por categoría y búsqueda por título, creador o contexto. Las imágenes son opcionales: si faltan o fallan, se conservan la ficha, el crédito y el enlace. Solo se admiten miniaturas HTTPS de los CDN de Twitch, YouTube y X especificados por el validador.
 
 Aplica también `0003_candidate_thumbnails.sql` con `npm run db:local`. Conserva las tablas y ediciones previas; añade una columna opcional para las miniaturas de los candidatos.
 
@@ -109,12 +109,83 @@ El iframe usa únicamente `https://clips.twitch.tv/embed`, con el clip validado,
 
 Comprobación de proveedor en desarrollo: el iframe real cargó en loopback HTTP y el vídeo avanzó tras la confirmación de contenido para audiencias adultas de Twitch; otra tarjeta inició su vídeo silenciado al pasar el ratón en esa sesión. Esa excepción local no sustituye los requisitos documentados de HTTPS para el dominio publicado ni garantiza autoplay en otras sesiones. Twitch puede pedir confirmación por clip o sesión y controlar el audio tras un clic del usuario. Los tests de CI simulan el contenido del iframe para comprobar su ciclo de vida; no afirman que el proveedor reproduzca vídeo. No se detectan automáticamente los fallos internos de un iframe de otro origen; el enlace alternativo se muestra siempre.
 
-
 ### Presentación editorial
 
 La interfaz pública usa un sistema de negro, lima y tipografía nativa, con fecha de edición, numeración de la selección y crédito visible. La cabecera permite llegar al buscador con foco en el campo; el footer conecta con la selección y el archivo. El catálogo se adapta a pantallas pequeñas y mantiene navegación por teclado y toque. Las microinteracciones afectan a portadas y colores; el reproductor y sus controles conservan posiciones estables y el modo de movimiento reducido elimina las transiciones. No añade dependencias de interfaz, Liquid Glass ni efectos 3D.
 
-
 La ampliación de tarjetas anima únicamente la cubierta previa al vídeo durante 240 ms, con salida de 140 ms y sin animación ante movimiento reducido. Una apertura cancelada nunca inserta un iframe tardío. El panel se mantiene dentro de la ventana, debajo de la cabecera y fuera del recorte del carrusel; el reproductor conserva su tamaño mínimo y se detiene antes de la salida. Las tarjetas originales y sus controles mantienen ancho, alto y posición durante todo el ciclo.
 
 La pantalla completa del reproductor conserva la sesión: los eventos de redimensionado asociados no la cierran. El panel continúa el orden de tabulación tras la tarjeta y el paso rápido por otra tarjeta no deja un vídeo anterior abierto.
+
+## Bandeja multifuente y Telegram local
+
+Esta ampliación añade captura manual de Twitch, YouTube (watch, Shorts y youtu.be) y publicaciones X/Twitter. No descarga archivos ni aloja vídeos. Se admiten únicamente enlaces HTTPS directos de los hosts exactos del validador; se eliminan parámetros conocidos de seguimiento y se rechazan redirecciones, acortadores y otros parámetros. Los IDs y anclas históricos de Twitch permanecen intactos; YouTube usa `youtube:ID` y X `x:ID`. Las instantáneas antiguas sin proveedor se interpretan como Twitch.
+
+### Configuración privada
+
+1. Ejecuta `npm run db:local` para aplicar también `0004_manual_inbox.sql`, aditiva y sin cambios en las tablas de importación Twitch ni en las ediciones existentes.
+2. Configura un **bot dedicado** y su propietario en archivos locales ignorados. No uses otro bot de automatización. No necesitas claves YouTube ni una API X de pago.
+3. Genera una clave compartida aleatoria (por ejemplo, `openssl rand -hex 32`). En `.dev.vars` configura:
+
+```dotenv
+LOCAL_BRIDGE_SECRET=<clave-aleatoria-compartida-de-al-menos-32-caracteres>
+TELEGRAM_OWNER_CHAT_ID=<chat-privado-del-propietario>
+TELEGRAM_OWNER_USER_ID=<usuario-del-propietario>
+```
+
+En `.env.telegram` configura los mismos valores y el token del bot dedicado:
+
+```dotenv
+TELEGRAM_BOT_TOKEN=<token-del-bot-dedicado>
+TELEGRAM_OWNER_CHAT_ID=<chat-privado-del-propietario>
+TELEGRAM_OWNER_USER_ID=<usuario-del-propietario>
+LOCAL_BRIDGE_SECRET=<misma-clave-aleatoria>
+LOCAL_BRIDGE_ORIGIN=http://127.0.0.1:8787
+```
+
+Protege ambos archivos con permisos privados (`chmod 600 .dev.vars .env.telegram`). No incluyas valores reales en Git ni logs. Reinicia el servidor después de cambiar `.dev.vars`.
+
+```sh
+npm run dev
+# En otra terminal:
+npm run bot
+# Estado local:
+npm run bot:status
+```
+
+El Worker local y el runner deben estar en el mismo ordenador. El bridge existe **solo en `src/local.ts`**, con flag explícito de desarrollo, origen HTTP loopback exacto y secreto compartido; rechaza solicitudes de navegador con `Origin`. La entrada de producción no incluye sus rutas. No uses túneles, webhooks ni exposición de puertos. La web local se usa en el ordenador; no se envían enlaces localhost como si fueran accesibles desde Telegram móvil.
+
+Para detener el runner, pulsa Ctrl-C; se libera el lease al terminar la operación en curso. Al reiniciar se retoma el cursor en D1 local. No se crea una segunda base de estado en Node. Telegram conserva actualizaciones pendientes **como máximo 24 horas**: apagar el equipo o dejar de sondear más tiempo puede perder mensajes, que deben reenviarse. Un segundo receptor no puede adquirir el lease hasta que el primero lo libere o caduque (90 segundos). No ejecutes otra aplicación con ese token.
+
+### Captura y edición
+
+- Envía texto, enlaces de entidades o pies de foto, también texto reenviado, hasta diez URLs por mensaje. Se informa guardados, duplicados, rechazados y exceso. No se usa el autor del reenvío como crédito de la fuente.
+- Los archivos adjuntos no se descargan; los mensajes editados no se importan: envía un mensaje nuevo. La validación del propietario (chat privado **y** usuario) ocurre antes de guardar contenido o consultar proveedores; otros usuarios no reciben respuestas.
+- `/ayuda` muestra instrucciones. `/estado` muestra la selección privada; `/edicion YYYY-MM-DD` cambia la fecha (por defecto, hoy en Europe/Madrid). `/seleccion` presenta orden y controles actualizados. `/preparar` marca una selección privada de 1–10 fuentes; **no crea una edición**. `/cancelar` cancela una entrada de contexto pendiente, sin borrar fuentes ni selección.
+- Los botones numerados permiten seleccionar/quitar, recorrer categorías, escribir contexto, descartar, subir/bajar y solicitar metadatos opcionales. Están ligados a fecha y revisiones; los controles antiguos no sobreescriben cambios. Cada acción devuelve controles renovados para el mismo lote; los botones antiguos que entren en conflicto se rechazan. También puedes usar `/seleccion`. Si compartes enlaces mientras se solicita contexto, se capturan y la pregunta de contexto permanece pendiente.
+- En `/admin/inbox` puedes capturar sin bot, filtrar por plataforma, estado y fecha de captura, revisar fuente, completar título/crédito/contexto y orientación, y ordenar/preparar la selección. La revisión importada de Twitch no se pierde al capturar un duplicado.
+- Los metadatos opcionales de YouTube se solicitan explícitamente desde la bandeja o el botón del bot, después de guardar. Solo se consulta el endpoint oficial fijo oEmbed, sin redirecciones, con límite de 32 KiB y cuatro segundos. Se aceptan campos de texto validados y una miniatura del CDN oficial; nunca HTML o scripts devueltos. Los fallos dejan los campos editables. X y Twitch manual no inventan metadatos; puedes completarlos o usar el importador Twitch existente.
+- **Cargar selección en editor** rellena el formulario, no guarda ni publica. Si ya hay un borrador, requiere confirmación explícita para añadir fuentes sin reemplazar las existentes; rechaza más de diez o una revisión concurrente. Se desmarca la revisión editorial al incorporar una selección. Completa los campos y confirma revisión antes de publicar una edición real; el snapshot público no cambia al capturar, editar la bandeja, seleccionar, preparar, cargar o guardar borradores.
+- Retirada admite URL original o ID de ficha. Se conserva la política de revisión y las anclas históricas.
+
+### Recuperación y límites de entrega
+
+Cursor, deduplicación por `update_id`, sesión, botones temporales y respuestas pendientes se guardan en D1 local ignorado (`.wrangler/`). Los efectos de cada actualización y su respuesta se confirman en una transacción antes de avanzar el cursor. No se almacenan actualizaciones crudas ni se registran IDs personales, tokens o cuerpos de errores. Las respuestas se envían exclusivamente al propietario configurado y solo como reacción a actualizaciones autorizadas; no hay publicaciones sociales ni mensajes proactivos.
+
+La outbox reintenta con espera exponencial acotada (hasta cinco minutos), respetando `retry_after` hasta 24 horas; después de ocho intentos queda marcada como fallida para diagnóstico. El estado muestra pendientes y fallidas. Una caída después de que Telegram acepte una respuesta pero antes de confirmar la entrega puede duplicar **esa respuesta**: `sendMessage` no ofrece clave de idempotencia. No duplica candidatos ni efectos editoriales. Reenvía el comando si una respuesta queda fallida. Las lecturas de sondeo están limitadas a diez actualizaciones y 256 KiB, con timeout; los handlers locales limitan el cuerpo a 64 KiB. No hay consultas arbitrarias a URLs enviadas.
+
+### Reproductores multifuente
+
+Se mantiene una única sesión de reproducción y la capa fija de entrada 240 ms/salida 140 ms, sin cambiar geometría ni scroll. Movimiento reducido, ahorro de datos, pérdida de visibilidad, Escape, foco, teclado, toque y pantalla completa conservan controles de cierre y fuente original.
+
+- **Twitch:** mismo iframe oficial y mínimo 400×300; las pantallas estrechas ofrecen el original.
+- **YouTube:** iframe API oficial, controles completos, `origin`, `enablejsapi`, `playsinline`, referencia `strict-origin-when-cross-origin` y mínimo 200×200. Intenta inicio silenciado cuando procede; hay botón de reproducción y controles oficiales si se bloquea. La orientación puede corregirse en el editor; el vídeo no se recorta ni distorsiona. No requiere clave de YouTube Data API.
+- **X:** carga `widgets.js` y llama a `twttr.widgets.createTweet` **solo después de un clic explícito**, conservando el contexto de la publicación en una zona desplazable. No se promete hover, autoplay, disponibilidad ni vistas contabilizadas. No se ejecuta HTML oEmbed. La CSP permite únicamente los hosts oficiales necesarios, sin comodines, `unsafe-inline` ni `unsafe-eval`; las páginas exclusivamente Twitch mantienen su política de scripts/frames anterior.
+
+**Comprobación de viabilidad X (2026-11-19):** la documentación oficial actual describe `createTweet`, su promesa y opciones; el `widgets.js` oficial respondió e incluye esa API. La antigua URL de documentación redirige al nuevo portal. Esto verifica la vía técnica pública, no la disponibilidad de una publicación concreta. Restricciones de cuenta, contenido borrado/protegido, consentimiento, bloqueadores o cambios del proveedor pueden impedir el embed. El enlace original permanece visible. [Referencia oficial](https://docs.x.com/x-for-websites/embedded-posts/guides/embedded-post-javascript-factory-function).
+
+Las pruebas automáticas separan D1/Telegram simulado y adaptadores oficiales simulados de comprobaciones reales. Los tests de navegador prueban una selección de cinco enlaces/tres proveedores, duplicados, privacidad, publicación explícita, retirada, y catálogo mixto a 320/390/768/1440 px. La verificación real de desarrollo observó reproducción silenciada de YouTube y reproducción de vídeo en una publicación de X después de pulsar sus controles oficiales. El bot real sigue pendiente de configurar su token privado; los mocks no acreditan reproducciones ni derechos. La carga de un embed tampoco acredita una reproducción completada ni vistas contabilizadas. El SDK de X intenta inyectar un estilo inline auxiliar que la CSP bloquea; se conserva la política estricta, y el post y sus controles se comprobaron por separado.
+
+### Rollback
+
+Detén el runner antes de volver al código anterior. Conserva una copia privada de D1 local; las tablas aditivas pueden permanecer. No elimines las tablas Twitch ni las ediciones. Las ediciones antiguas Twitch son compatibles; un código anterior a multifuente no entiende nuevas ediciones YouTube/X, por lo que no debe servirlas sin restaurar un snapshot compatible revisado. No se realiza despliegue ni rollback remoto automáticamente.

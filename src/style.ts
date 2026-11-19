@@ -466,4 +466,16 @@ button:focus-visible {
 .layer-footer .button { flex: 0 0 auto; text-decoration: none; }
 .layer-footer p { margin: 0; color: #b7c5a4; font-size: 12px; line-height: 1.5; }
 @media (max-width:520px) { .layer-heading { gap: 10px; padding: 12px; }.layer-heading h2 { font-size: 18px; }.public-page .layer-heading button { max-width: 100px; }.layer-footer { padding: 12px; gap: 10px; } }
+
+.preview-stage[data-provider=youtube] iframe { min-width: 200px; min-height: 200px; }
+.preview-stage[data-orientation=portrait] > img { object-fit: contain; }
+.preview-stage[data-provider=youtube][data-orientation=portrait] iframe { width: 200px; left: 50%; transform: translateX(-50%); }
+.preview-stage[data-provider=x] { overflow: auto; }
+.preview-stage[data-provider=x] iframe { position: static; min-height: 0; color-scheme: dark; }
+.preview-stage[data-provider=x] > div { position: relative; z-index: 1; }
+@media (max-width:431px) {
+ .hero-preview[data-provider=youtube], .hero-preview[data-provider=x] { display: block; min-width: 0; }
+ .catalog-card[data-provider=youtube] .preview-toolbar, .catalog-card[data-provider=x] .preview-toolbar { display: flex; }
+ .card-preview-layer[data-provider=youtube] .preview-stage, .card-preview-layer[data-provider=x] .preview-stage { height: 240px; }
+}
 `;
