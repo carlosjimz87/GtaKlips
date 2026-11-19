@@ -1,3 +1,5 @@
+import { importTwitch, type Candidate } from "./importer";
+import { importPage, importScript } from "./import-admin";
 import { authorized, type Env } from "./auth";
 import {
   categories,
@@ -95,6 +97,24 @@ async function route(
       )
         return json({ error: "Origen no permitido" }, 403);
       const v = await body(request);
+      if (path === "/admin/import")
+        return json(await importTwitch(env, "manual"));
+      if (path === "/admin/candidates/review") {
+        if (
+          typeof v.id !== "string" ||
+          !/^[A-Za-z0-9_-]{1,100}$/.test(v.id) ||
+          !["pending", "selected", "rejected"].includes(v.state)
+        )
+          return json({ error: "Revisión de candidato no válida" }, 400);
+        const result = await env.DB.prepare(
+          "UPDATE candidates SET review_state=? WHERE id=?",
+        )
+          .bind(v.state, v.id)
+          .run();
+        return result.meta.changes
+          ? json({ ok: true })
+          : json({ error: "Candidato no encontrado" }, 404);
+      }
       if (!Number.isSafeInteger(v.revision) || v.revision < 0)
         throw Error("Revisión no válida");
       if (path === "/admin/save" || path === "/admin/publish") {
@@ -169,6 +189,28 @@ async function route(
     }
     if (request.method !== "GET")
       return json({ error: "Método no permitido" }, 405);
+    if (path === "/admin/imports")
+      return page(
+        "Importaciones",
+        await importPage(env, url.searchParams.get("offset")),
+        base + path,
+        undefined,
+        true,
+      );
+    if (path === "/admin/imports.js")
+      return new Response(importScript, {
+        headers: { "Content-Type": "text/javascript; charset=utf-8" },
+      });
+    if (path === "/admin/candidate") {
+      const candidate = await env.DB.prepare(
+        "SELECT * FROM candidates WHERE id=?",
+      )
+        .bind(url.searchParams.get("id"))
+        .first<Candidate>();
+      return candidate
+        ? json(candidate)
+        : json({ error: "Candidato no encontrado" }, 404);
+    }
     if (path === "/admin/editor.js")
       return new Response(adminScript, {
         headers: { "Content-Type": "text/javascript; charset=utf-8" },
@@ -316,4 +358,13 @@ export async function handle(
     headers,
   });
 }
-export default { fetch: (request: Request, env: Env) => handle(request, env) };
+export default {
+  fetch: (request: Request, env: Env) => handle(request, env),
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+    ctx: ExecutionContext,
+  ) {
+    ctx.waitUntil(importTwitch(env, "cron"));
+  },
+};
