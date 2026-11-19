@@ -101,7 +101,7 @@ Las fuentes de `demo/twitch-clips.json` se contrastaron con las fichas públicas
 
 ### Vistas previas de Twitch
 
-El destacado intenta reproducirse sin sonido en escritorio cuando el reproductor está completamente visible. Las tarjetas muestran una vista previa tras mantener el ratón encima durante medio segundo y amplían su espacio para alojar el reproductor. Solo se mantiene un iframe activo: salir de la tarjeta, ocultar la pestaña, dejar el reproductor fuera de pantalla o pulsar Escape lo retira. También hay botones para iniciar y detener la vista previa con teclado o toque.
+El destacado intenta reproducirse sin sonido en escritorio cuando el reproductor está completamente visible. Las tarjetas muestran una vista previa flotante tras mantener el ratón encima durante medio segundo. La portada se amplía suavemente en una capa anclada, sin cambiar la geometría ni el scroll del catálogo; Twitch se monta cuando termina la entrada. Solo se mantiene un iframe activo: alejarse de la tarjeta y su panel, ocultar la pestaña, dejar el reproductor fuera de pantalla o pulsar Escape lo retira. También hay botones para iniciar y cerrar con teclado o toque; el cierre devuelve el foco al control original. El puntero puede pasar de la tarjeta al panel y al vídeo sin interrumpirlo. Desplazar o redimensionar la página cierra el panel para no dejarlo separado de su origen.
 
 Se respeta movimiento reducido y ahorro de datos: ambos desactivan los inicios automáticos. Twitch exige un reproductor visible de al menos 400×300 px; las pantallas que no permiten ese espacio conservan la imagen y el enlace original. En móvil se requiere interacción. No se ocultan los controles ni se superponen textos al reproductor.
 
@@ -113,3 +113,8 @@ Comprobación de proveedor en desarrollo: el iframe real cargó en loopback HTTP
 ### Presentación editorial
 
 La interfaz pública usa un sistema de negro, lima y tipografía nativa, con fecha de edición, numeración de la selección y crédito visible. La cabecera permite llegar al buscador con foco en el campo; el footer conecta con la selección y el archivo. El catálogo se adapta a pantallas pequeñas y mantiene navegación por teclado y toque. Las microinteracciones afectan a portadas y colores; el reproductor y sus controles conservan posiciones estables y el modo de movimiento reducido elimina las transiciones. No añade dependencias de interfaz, Liquid Glass ni efectos 3D.
+
+
+La ampliación de tarjetas anima únicamente la cubierta previa al vídeo durante 240 ms, con salida de 140 ms y sin animación ante movimiento reducido. Una apertura cancelada nunca inserta un iframe tardío. El panel se mantiene dentro de la ventana, debajo de la cabecera y fuera del recorte del carrusel; el reproductor conserva su tamaño mínimo y se detiene antes de la salida. Las tarjetas originales y sus controles mantienen ancho, alto y posición durante todo el ciclo.
+
+La pantalla completa del reproductor conserva la sesión: los eventos de redimensionado asociados no la cierran. El panel continúa el orden de tabulación tras la tarjeta y el paso rápido por otra tarjeta no deja un vídeo anterior abierto.

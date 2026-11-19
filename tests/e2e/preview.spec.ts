@@ -7,6 +7,12 @@ import {
   type BrowserContext,
 } from "@playwright/test";
 
+const runtimeErrors = new WeakMap<BrowserContext, string[]>();
+async function closeContext(ctx: BrowserContext) {
+  await ctx.close();
+  expect(runtimeErrors.get(ctx)).toEqual([]);
+}
+
 async function seed(request: APIRequestContext, date: string) {
   const token = await readFile(".wrangler/e2e/editor-token", "utf8");
   const result = await request.post("/admin/publish", {
@@ -47,16 +53,28 @@ async function context(
     deviceScaleFactor: 1,
     ...options,
   });
+  runtimeErrors.set(ctx, []);
+  ctx.on("page", (page) =>
+    page.on("pageerror", (error) =>
+      runtimeErrors.get(ctx)!.push(error.message),
+    ),
+  );
   await ctx.route("https://clips.twitch.tv/embed?**", (route) =>
     route.fulfill({
       contentType: "text/html",
-      body: '<html><body style="margin:0;background:#162821;color:white"><p>Reproductor simulado de Twitch</p></body></html>',
+      body: '<html><body style="margin:0;background:#162821;color:white"><p>Reproductor simulado de Twitch</p><button onclick="document.documentElement.requestFullscreen()">Pantalla completa</button></body></html>',
     }),
   );
   return ctx;
 }
 async function assertFrame(ctx: BrowserContext, selector: string) {
-  const frame = ctx.pages()[0].locator(selector + " iframe");
+  const frame = ctx
+    .pages()[0]
+    .locator(
+      selector === ".hero-preview"
+        ? selector + " iframe"
+        : `.card-preview-layer[data-preview-owner="${selector.slice(1)}"] iframe`,
+    );
   await expect(frame).toHaveCount(1);
   const url = new URL((await frame.getAttribute("src"))!);
   expect(url.origin + url.pathname).toBe("https://clips.twitch.tv/embed");
@@ -95,13 +113,30 @@ test("destacado automático, hover diferido, un solo reproductor y salida segura
     await card.scrollIntoViewIfNeeded();
     await card.hover();
     await page.waitForTimeout(150);
-    await expect(card.locator("iframe")).toHaveCount(0);
+    await expect(page.locator(".card-preview-layer")).toHaveCount(0);
     await assertFrame(ctx, "#clip-PreviewClip0");
     await page.screenshot({
       path: test.info().outputPath("preview-hover.png"),
-      fullPage: true,
+      fullPage: false,
     });
+    await page.locator(".card-preview-layer iframe").hover();
+    await page
+      .frameLocator(".card-preview-layer iframe")
+      .getByText("Reproductor simulado de Twitch")
+      .click();
+    // Remain inside the player beyond the pointer handoff grace period.
+    await page.waitForTimeout(180);
+    await expect(page.locator(".card-preview-layer iframe")).toHaveCount(1);
+    // A neighbouring card must not cancel the previous owner's close timer.
+    const second = (await page.locator("#clip-PreviewClip1").boundingBox())!;
+    await page.mouse.move(second.x + second.width - 20, second.y + 24);
+    await assertFrame(ctx, "#clip-PreviewClip1");
+    const third = (await page.locator("#clip-PreviewClip2").boundingBox())!;
+    await page.mouse.move(third.x + third.width - 20, third.y + 24);
     await page.mouse.move(5, 5);
+    await expect(page.locator("iframe")).toHaveCount(0);
+    // Crossing the next card briefly must not open a delayed replacement.
+    await page.waitForTimeout(600);
     await expect(page.locator("iframe")).toHaveCount(0);
     await card
       .getByRole("button", { name: "Vista previa", exact: true })
@@ -115,6 +150,15 @@ test("destacado automático, hover diferido, un solo reproductor y salida segura
       .getByRole("button", { name: "Vista previa", exact: true })
       .click();
     await assertFrame(ctx, "#clip-PreviewClip0");
+    await page.locator(".card-preview-layer .layer-footer a").focus();
+    await page.keyboard.press("Tab");
+    await expect(
+      page.locator("#clip-PreviewClip1 [data-source]"),
+    ).toBeFocused();
+    await expect(page.locator("iframe")).toHaveCount(0);
+    await card.locator("[data-preview-toggle]").focus();
+    await page.keyboard.press("Enter");
+    await assertFrame(ctx, "#clip-PreviewClip0");
     await page.locator("#clips-rail").evaluate((el) => {
       (el as HTMLElement).style.scrollSnapType = "none";
       el.scrollLeft = 25;
@@ -127,7 +171,7 @@ test("destacado automático, hover diferido, un solo reproductor y salida segura
     await assertFrame(ctx, "#clip-PreviewClip0");
     await page.evaluate(() => {
       const stage = document
-        .querySelector(".catalog-card.previewing .preview-stage")!
+        .querySelector(".card-preview-layer .preview-stage")!
         .getBoundingClientRect();
       const header = document.querySelector("header")!.getBoundingClientRect();
       window.scrollBy(0, stage.top - header.bottom + 10);
@@ -142,12 +186,38 @@ test("destacado automático, hover diferido, un solo reproductor y salida segura
     await edgeCard.scrollIntoViewIfNeeded();
     await edgeCard.hover();
     await assertFrame(ctx, "#clip-PreviewClip4");
-    const edgeBox = (await edgeCard.locator("iframe").boundingBox())!;
-    const railBox = (await page.locator("#clips-rail").boundingBox())!;
-    expect(edgeBox.x).toBeGreaterThanOrEqual(railBox.x);
-    expect(edgeBox.x + edgeBox.width).toBeLessThanOrEqual(
-      railBox.x + railBox.width,
+    const edgeBox = (await page
+      .locator(".card-preview-layer iframe")
+      .boundingBox())!;
+    const viewportWidth = await page.evaluate(
+      () => document.documentElement.clientWidth,
     );
+    const headerBottom = await page
+      .locator("header")
+      .evaluate((el) => el.getBoundingClientRect().bottom);
+    expect(edgeBox.x).toBeGreaterThanOrEqual(12);
+    expect(edgeBox.x + edgeBox.width).toBeLessThanOrEqual(viewportWidth - 12);
+    expect(edgeBox.y).toBeGreaterThan(headerBottom);
+    await page
+      .frameLocator(".card-preview-layer iframe")
+      .getByRole("button", { name: "Pantalla completa" })
+      .click();
+    await expect
+      .poll(() => page.evaluate(() => document.fullscreenElement?.tagName))
+      .toBe("IFRAME");
+    await page.evaluate(() => {
+      dispatchEvent(new Event("resize"));
+      dispatchEvent(new Event("scroll"));
+    });
+    await expect(page.locator(".card-preview-layer iframe")).toHaveCount(1);
+    await page.evaluate(() => document.exitFullscreen());
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    await expect(page.locator(".card-preview-layer iframe")).toHaveCount(1);
     await page.evaluate(() => {
       Object.defineProperty(document, "hidden", {
         configurable: true,
@@ -161,7 +231,7 @@ test("destacado automático, hover diferido, un solo reproductor y salida segura
       "https://clips.twitch.tv/PreviewClip0",
     );
   } finally {
-    await ctx.close();
+    await closeContext(ctx);
   }
 });
 
@@ -195,7 +265,7 @@ test("movimiento reducido impide autoplay pero permite inicio manual", async ({
       ),
     ).toBe(true);
   } finally {
-    await ctx.close();
+    await closeContext(ctx);
   }
 });
 
@@ -250,19 +320,26 @@ test("móvil estrecho conserva la fuente y móvil amplio requiere toque; fallo c
     expect(offsetAfter).toBeCloseTo(offsetBefore, 0);
     await expect(
       page
-        .frameLocator("#clip-PreviewClip0 iframe")
+        .frameLocator(
+          '.card-preview-layer[data-preview-owner="clip-PreviewClip0"] iframe',
+        )
         .getByText("Reproductor simulado de Twitch"),
     ).toBeVisible();
     await expect(toggle).toHaveText("Detener vista previa");
-    await expect(toggle).toBeInViewport();
-    const stopButton = (await toggle.boundingBox())!;
-    // Send the physical touch at the visible control. Locator.tap may scroll and
-    // retry after the offscreen guard has already stopped and relabelled it.
+    const close = page.getByRole("button", {
+      name: "Cerrar vista previa",
+      exact: true,
+    });
+    await expect(close).toBeFocused();
+    await expect(close).toBeInViewport();
+    const stopButton = (await close.boundingBox())!;
+    // Send a physical touch to the visible floating control without driver scroll.
     await page.touchscreen.tap(
       stopButton.x + stopButton.width / 2,
       stopButton.y + stopButton.height / 2,
     );
     await expect(page.locator("iframe")).toHaveCount(0);
+    await expect(toggle).toBeFocused();
     await page.locator(".hero-preview").scrollIntoViewIfNeeded();
     await ctx.route("https://clips.twitch.tv/embed?**", (route) =>
       route.abort(),
@@ -276,7 +353,7 @@ test("móvil estrecho conserva la fuente y móvil amplio requiere toque; fallo c
       "https://clips.twitch.tv/PreviewClip0",
     );
   } finally {
-    await ctx.close();
+    await closeContext(ctx);
   }
 });
 
@@ -305,6 +382,92 @@ test("ahorro de datos por sí solo desactiva destacado y hover automáticos", as
     await card.locator("[data-preview-toggle]").click();
     await assertFrame(ctx, "#clip-PreviewClip0");
   } finally {
-    await ctx.close();
+    await closeContext(ctx);
+  }
+});
+
+test("preview flotante: animación antes del vídeo, geometría intacta y cancelación sin iframe tardío", async ({
+  browser,
+  request,
+}) => {
+  const date = "2095-05-10";
+  await seed(request, date);
+  const ctx = await context(browser);
+  try {
+    await ctx.addInitScript(() => {
+      const animate = Element.prototype.animate;
+      (window as any).heldPreviewAnimations = [];
+      Element.prototype.animate = function (
+        ...args: Parameters<Element["animate"]>
+      ) {
+        const result = animate.apply(this, args);
+        if (
+          this.classList.contains("card-preview-layer") &&
+          this.getAttribute("data-phase") === "opening"
+        ) {
+          result.pause();
+          (window as any).heldPreviewAnimations.push(result);
+        }
+        return result;
+      };
+    });
+    const page = await ctx.newPage();
+    await page.goto("/dia/" + date + "#seleccion");
+    await expect(page.locator("iframe")).toHaveCount(0);
+    const card = page.locator("#clip-PreviewClip0");
+    await card.scrollIntoViewIfNeeded();
+    const geometry = () =>
+      page.evaluate(() => ({
+        cards: Array.from(document.querySelectorAll(".catalog-card")).map(
+          (el) => {
+            const { x, y, width, height } = el.getBoundingClientRect();
+            return { x, y, width, height };
+          },
+        ),
+        rail: document.getElementById("clips-rail")!.scrollLeft,
+        railWidth: document.getElementById("clips-rail")!.scrollWidth,
+        railHeight: document.getElementById("clips-rail")!.clientHeight,
+        pageY: scrollY,
+        genre: document.querySelector(".genre-section")!.getBoundingClientRect()
+          .top,
+        footer: document.querySelector("footer")!.getBoundingClientRect().top,
+        height: document.documentElement.scrollHeight,
+      }));
+    const before = await geometry();
+    await card.hover();
+    const layer = page.locator(".card-preview-layer");
+    await expect(layer).toHaveAttribute("data-phase", "opening");
+    await expect(page.locator("iframe")).toHaveCount(0);
+    expect(await geometry()).toEqual(before);
+    await page.evaluate(() =>
+      (window as any).heldPreviewAnimations[0].finish(),
+    );
+    await assertFrame(ctx, "#clip-PreviewClip0");
+    await expect(layer).toHaveAttribute("data-phase", "ready");
+    expect(await geometry()).toEqual(before);
+    await page.mouse.move(5, 5);
+    await expect(page.locator("iframe")).toHaveCount(0);
+    await expect(layer).toHaveCount(0);
+    expect(await geometry()).toEqual(before);
+    await card.hover();
+    await expect(layer).toHaveAttribute("data-phase", "opening");
+    await page.keyboard.press("Escape");
+    await expect(layer).toHaveCount(0);
+    // Even restarting a previously cancelled animation cannot mount stale media.
+    await page.evaluate(() => {
+      const animation = (window as any).heldPreviewAnimations[1];
+      animation.play();
+      animation.finish();
+    });
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    await expect(page.locator("iframe")).toHaveCount(0);
+    expect(await geometry()).toEqual(before);
+  } finally {
+    await closeContext(ctx);
   }
 });
