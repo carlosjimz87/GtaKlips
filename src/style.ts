@@ -384,7 +384,7 @@ button:focus-visible {
 .public-page .billboard { flex-wrap: wrap; gap: 24px; padding-right: clamp(20px,4.5vw,80px); }
 .billboard-content { flex: 1 1 480px; width: auto; max-width: 820px; }
 .hero-preview { flex: 1 1 420px; min-width: 0; max-width: 640px; margin: 32px 0 60px; border: 1px solid #343b42; border-radius: 8px; background: #11151b; overflow: hidden; }
-.preview-stage { position: relative; width: 100%; height: max(300px,22vw); max-height: 360px; background: #0b0e13; }
+.preview-stage { position: relative; width: 100%; height: max(304px,22vw); max-height: 360px; background: #0b0e13; }
 .preview-stage > img { width: 100%; height: 100%; object-fit: cover; }
 .preview-placeholder { position: absolute; inset: auto 16px 16px; color: #fff; font-size: 14px; }
 .preview-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
@@ -398,7 +398,7 @@ button:focus-visible {
 .public-page .catalog-card { flex: 0 0 clamp(255px,24vw,340px); }
 .clip-link { height: auto; }
 .public-page .catalog-card.previewing { flex-basis: 432px; }
-.catalog-card .preview-stage { height: 300px; }
+.catalog-card .preview-stage { height: 304px; }
 .public-page .catalog-card { display: flex; flex-direction: column; }
 .catalog-card .preview-toolbar { order: 0; align-items: flex-start; }
 .catalog-card .preview-stage { order: 1; }
