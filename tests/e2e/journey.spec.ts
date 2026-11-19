@@ -420,6 +420,13 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
     await expect(
       page.locator(".billboard .featured-credit:visible"),
     ).toContainText("Creador catálogo 2");
+    expect(
+      await page
+        .locator(".genre-card strong")
+        .evaluateAll((labels) =>
+          labels.every((el) => el.scrollWidth <= el.clientWidth + 1),
+        ),
+    ).toBe(true);
     await expect(
       page
         .locator("header")

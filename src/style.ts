@@ -444,7 +444,7 @@ button:focus-visible {
  .demo-banner { font-size: 12px; }.catalog-section { margin-top: 36px; }.section-heading { align-items: start; gap: 12px; margin-bottom: 20px; }
  .section-heading h2 { font-size: 30px; }.section-heading .eyebrow { font-size: 10px; }.rail-controls { gap: 6px; }.public-page .rail-controls button { min-height: 40px; padding: 8px; font-size: 11px; }
  .public-page .catalog-card { flex-basis: min(82vw,320px); }.public-page .catalog-card.previewing { flex-basis: 432px; }.catalog-rail { gap: 14px; }
- .genre-grid { gap: 12px; }.genre-card { min-height: 160px; }.genre-card > span { padding: 16px; }.genre-card strong { font-size: 24px; }.genre-card small { font-size: 12px; }
+ .genre-grid { gap: 12px; }.genre-card { min-height: 160px; }.genre-card > span { padding: 16px; }.genre-card strong { font-size: clamp(16px,4.8vw,24px); }.genre-card small { font-size: 12px; }
  .clip-info { padding: 16px; }.clip-info h2 { font-size: 21px; }.clip-caption { font-size: 16px; }.text-link { max-width: 14ch; text-align: right; font-size: 13px; }
  .footer-main { grid-template-columns: 1fr; gap: 32px; }.footer-credit { grid-column: auto; }.public-page footer { padding-top: 38px; }.footer-statement { font-size: 36px; }
  .footer-bottom { gap: 12px; }.billboard-compact { min-height: 0 !important; }.billboard-compact h1 { font-size: 40px !important; }
