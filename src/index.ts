@@ -37,9 +37,22 @@ function page(
   canonical: string,
   description = "Una selección editorial de clips de GTA VI, con contexto en español y crédito a sus creadores.",
   privatePage = false,
+  route = new URL(canonical).pathname,
 ): Response {
+  const selection = route === "/";
+  const archive = route === "/archivo";
+  const hasSearch = content.includes('id="buscar"');
+  const canSearch =
+    hasSearch || (archive && content.includes('<ul class="archive"><li>'));
+  const search = hasSearch ? "#buscar" : "/#buscar";
+  const header = privatePage
+    ? '<header><a href="/" class="brand">Gta<span>Klips</span></a><nav aria-label="Principal"><a href="/">La selección</a><a href="/archivo">Archivo</a></nav></header>'
+    : `<a class="skip-link" href="#contenido">Saltar al contenido</a><header><div class="masthead"><a href="/" class="brand" aria-label="GtaKlips · Inicio">Gta<span>Klips</span></a><span class="brand-caption">EL DIRECTO.<br>LOS BUENOS MOMENTOS.</span></div><nav aria-label="Principal"><a class="nav-selection" href="/#seleccion" ${selection ? 'aria-current="page"' : ""}>Selección</a><a href="/archivo" ${archive ? 'aria-current="page"' : ""}>Archivo</a>${canSearch ? `<a class="nav-search" href="${search}">Buscar</a>` : ""}</nav></header>`;
+  const footer = privatePage
+    ? "<footer>GtaKlips · Curación independiente en español. Sin afiliación con Rockstar Games ni Twitch.</footer>"
+    : `<footer class="editorial-footer"><div class="footer-main"><div><a href="/" class="brand">Gta<span>Klips</span></a><p class="footer-statement">El directo pasa.<br>El momento se queda.</p><p class="footer-caption">Una selección con contexto y crédito a quienes la hacen posible.</p></div><nav aria-label="Más momentos"><p class="eyebrow">SIGUE EXPLORANDO</p><a href="/#seleccion">La selección actual</a><a href="/archivo">Ediciones anteriores</a></nav><div class="footer-credit"><p class="eyebrow">DE SUS CREADORES A TU PANTALLA</p><p>Cada clip conserva su autor y el acceso a la fuente original en Twitch.</p><a class="button secondary" href="/archivo">Explorar archivo</a></div></div><div class="footer-bottom"><span>GtaKlips · Curación independiente en español.</span><p>Sin afiliación con Rockstar Games ni Twitch. Los vídeos se reproducen mediante Twitch o en su web; no alojamos copias. Twitch puede aplicar sus cookies y controles de contenido.</p></div></footer>`;
   return new Response(
-    `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · GtaKlips</title><meta name="description" content="${esc(description)}"><meta name="robots" content="${privatePage ? "noindex, nofollow" : "index, follow"}"><link rel="canonical" href="${esc(canonical)}"><meta property="og:type" content="website"><meta property="og:locale" content="es_ES"><meta property="og:site_name" content="GtaKlips"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${esc(canonical)}"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/style.css"></head><body class="${privatePage ? "admin-page" : "public-page"}"><header><a href="/" class="brand">Gta<span>Klips</span></a><nav aria-label="Principal"><a href="/">La selección</a><a href="/archivo">Archivo</a></nav></header><main>${content}</main>${privatePage ? "" : '<script src="/catalog.js" defer></script>'}<footer>GtaKlips · Curación independiente en español. Sin afiliación con Rockstar Games ni Twitch.<br>Los vídeos se reproducen mediante Twitch o en su web. No alojamos copias. Twitch puede aplicar sus cookies y controles de contenido.</footer></body></html>`,
+    `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · GtaKlips</title><meta name="description" content="${esc(description)}"><meta name="robots" content="${privatePage ? "noindex, nofollow" : "index, follow"}"><link rel="canonical" href="${esc(canonical)}"><meta property="og:type" content="website"><meta property="og:locale" content="es_ES"><meta property="og:site_name" content="GtaKlips"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${esc(canonical)}"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/style.css"></head><body class="${privatePage ? "admin-page" : "public-page"}">${header}<main id="contenido" tabindex="-1">${content}</main>${privatePage ? "" : '<script src="/catalog.js" defer></script>'}${footer}</body></html>`,
     { headers: { "Content-Type": "text/html; charset=utf-8" } },
   );
 }
@@ -309,6 +322,8 @@ async function route(
         ),
         base + "/dia/" + e.date,
         e.intro,
+        false,
+        path,
       );
     }
     if (path === "/")

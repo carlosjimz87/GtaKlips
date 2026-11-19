@@ -351,8 +351,20 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
   };
   await page.route("https://static-cdn.jtvnw.net/fixture/**", mockPosters);
   await page.goto("/dia/" + edition.date);
+  await page
+    .locator("header")
+    .getByRole("link", { name: "Buscar", exact: true })
+    .click();
+  await expect(page.getByLabel("Encuentra un clip o un creador")).toBeFocused();
+  await expect(
+    page.getByLabel("Encuentra un clip o un creador"),
+  ).toBeInViewport();
+  await page.goto("/dia/" + edition.date);
   await expect(page.locator(".catalog-card")).toHaveCount(5);
   await expect(page.locator(".billboard h1")).toHaveText(edition.title);
+  await expect(
+    page.locator(".billboard .featured-credit:visible"),
+  ).toContainText("Creador catálogo 2");
   await expect(
     page.getByRole("link", { name: "Reproducir en Twitch", exact: true }),
   ).toHaveAttribute("href", "https://clips.twitch.tv/CatalogBrowser2");
@@ -394,6 +406,46 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
     path: test.info().outputPath("catalog-mobile.png"),
     fullPage: true,
   });
+  for (const [width, height] of [
+    [320, 740],
+    [768, 1100],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/dia/" + edition.date);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await expect(
+      page.locator(".billboard .featured-credit:visible"),
+    ).toContainText("Creador catálogo 2");
+    await expect(
+      page
+        .locator("header")
+        .getByRole("link", { name: "Archivo", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .locator("footer")
+        .getByRole("link", { name: "Ediciones anteriores" }),
+    ).toHaveAttribute("href", "/archivo");
+    await page.screenshot({
+      path: test.info().outputPath(`editorial-${width}.png`),
+      fullPage: true,
+    });
+  }
+  await page
+    .locator("footer")
+    .getByRole("link", { name: "Ediciones anteriores" })
+    .click();
+  await expect(page).toHaveURL(/\/archivo$/);
+  await expect(page.locator("h1")).toHaveText("El archivo.");
+  await page
+    .locator("header")
+    .getByRole("link", { name: "Buscar", exact: true })
+    .click();
+  await expect(page.getByLabel("Encuentra un clip o un creador")).toBeFocused();
   const desktop = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
     deviceScaleFactor: 1,
@@ -411,6 +463,12 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
     });
     const view = await desktop.newPage();
     await view.goto("/dia/" + edition.date);
+    await view.keyboard.press("Tab");
+    await expect(
+      view.getByRole("link", { name: "Saltar al contenido" }),
+    ).toBeFocused();
+    await view.keyboard.press("Enter");
+    await expect(view.locator("main")).toBeFocused();
     await view.locator(".catalog-card a").first().focus();
     await expect(view.locator(".catalog-card a").first()).toBeFocused();
     await view.goto("/dia/" + edition.date);
