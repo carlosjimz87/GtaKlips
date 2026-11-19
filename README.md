@@ -80,3 +80,21 @@ Aplica también `0002_twitch.sql` antes de ejecutar la etapa 2. Es una migració
 Las pruebas verifican deduplicación y actualización, conservación de la revisión, OAuth y categoría, paginación y resultados parciales, respuestas vacías o malformadas, límites, conexión y tiempo de espera, migración, bloqueo y recuperación, errores de escritura y privacidad. El navegador móvil prueba fallo, reintento, revisión privada y publicación editorial explícita. Las fuentes ficticias no acreditan disponibilidad, permisos ni contenido real. La conexión real con Twitch y la configuración de Cloudflare quedan pendientes hasta disponer de una aplicación y de un destino de despliegue.
 
 Referencias de integración: [Get Clips](https://dev.twitch.tv/docs/api/reference/clips), [Get Games](https://dev.twitch.tv/docs/api/reference/games), [OAuth](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/), [Cron](https://developers.cloudflare.com/workers/runtime-apis/handlers/scheduled/).
+
+## Catálogo visual y demo local
+
+La portada presenta un destacado con reproducción en Twitch, tarjetas con miniaturas, navegación horizontal, filtros por categoría y búsqueda por título, creador o contexto. Las imágenes son opcionales: si faltan o fallan, se conservan la ficha, el crédito y el enlace. Solo se admiten miniaturas HTTPS de los CDN de Twitch especificados por el validador.
+
+Aplica también `0003_candidate_thumbnails.sql` con `npm run db:local`. Conserva las tablas y ediciones previas; añade una columna opcional para las miniaturas de los candidatos.
+
+Para preparar cinco clips reales **solo en D1 local**:
+
+```sh
+npm run db:local
+npm run seed:demo
+npm run dev
+```
+
+`seed:demo` guarda antes un respaldo ignorado en `.wrangler/demo-backups/`. Crea una edición de demostración para la fecha de Madrid y retira de publicación únicamente los fixtures automatizados reconocidos, conservándolos como borradores. Repetir el comando no duplica la edición. Si encuentra una edición propia o cualquier cambio manual en la demo de hoy —incluida la retirada de un clip—, se detiene para no sobrescribirlo; tampoco permite seleccionar un destino remoto. Las pruebas de navegador usan un puerto separado del servidor de desarrollo.
+
+Las fuentes de `demo/twitch-clips.json` se contrastaron con las fichas públicas y miniaturas de Twitch. Eso acredita la disponibilidad de esos metadatos en la fecha indicada; no garantiza disponibilidad futura, revisión editorial, permisos comerciales ni que Twitch contabilice una visualización. Las tarjetas abren el original, sin alojar copias de vídeo. La reproducción real debe comprobarse en Twitch con tu navegador.

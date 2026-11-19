@@ -1,14 +1,8 @@
+import { editionView, emptyView, catalogScript } from "./catalog";
 import { importTwitch, type Candidate } from "./importer";
 import { importPage, importScript } from "./import-admin";
 import { authorized, type Env } from "./auth";
-import {
-  categories,
-  dateValid,
-  esc,
-  post,
-  validate,
-  type Edition,
-} from "./model";
+import { dateValid, esc, post, validate, type Edition } from "./model";
 import { css } from "./style";
 import { adminScript, editor } from "./admin";
 interface Row {
@@ -45,13 +39,9 @@ function page(
   privatePage = false,
 ): Response {
   return new Response(
-    `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · GtaKlips</title><meta name="description" content="${esc(description)}"><meta name="robots" content="${privatePage ? "noindex, nofollow" : "index, follow"}"><link rel="canonical" href="${esc(canonical)}"><meta property="og:type" content="website"><meta property="og:locale" content="es_ES"><meta property="og:site_name" content="GtaKlips"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${esc(canonical)}"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/style.css"></head><body><header><a href="/" class="brand">Gta<span>Klips</span><span aria-hidden="true"> ↗</span></a><nav aria-label="Principal"><a href="/">La selección</a><a href="/archivo">Archivo</a></nav></header><main>${content}</main><footer>GtaKlips · Curación independiente en español. Sin afiliación con Rockstar Games ni Twitch.<br>Los clips se abren en Twitch; aquí no alojamos vídeos ni usamos seguimiento publicitario.</footer></body></html>`,
+    `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · GtaKlips</title><meta name="description" content="${esc(description)}"><meta name="robots" content="${privatePage ? "noindex, nofollow" : "index, follow"}"><link rel="canonical" href="${esc(canonical)}"><meta property="og:type" content="website"><meta property="og:locale" content="es_ES"><meta property="og:site_name" content="GtaKlips"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${esc(canonical)}"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/style.css"></head><body class="${privatePage ? "admin-page" : "public-page"}"><header><a href="/" class="brand">Gta<span>Klips</span></a><nav aria-label="Principal"><a href="/">La selección</a><a href="/archivo">Archivo</a></nav></header><main>${content}</main>${privatePage ? "" : '<script src="/catalog.js" defer></script>'}<footer>GtaKlips · Curación independiente en español. Sin afiliación con Rockstar Games ni Twitch.<br>Los clips se abren en Twitch; aquí no alojamos vídeos ni usamos seguimiento publicitario.</footer></body></html>`,
     { headers: { "Content-Type": "text/html; charset=utf-8" } },
   );
-}
-function editionView(e: Edition, category: string | null): string {
-  const filtered = e.clips.filter((c) => !category || c.category === category);
-  return `<section class="hero"><p class="eyebrow">La selección / <time>${esc(e.date)}</time></p><h1>${esc(e.title)}</h1><p class="lead">${esc(e.intro)}</p><p class="meta">${e.clips.length} clips · Contexto en español · Crédito a cada creador</p>${e.demo ? '<aside class="notice">DEMOSTRACIÓN · Datos de prueba. Estos clips no son metraje real verificado ni una selección editorial aprobada.</aside>' : ""}</section><nav class="filters" aria-label="Categorías">${["Todos", ...categories].map((c) => `<a href="/dia/${e.date}${c === "Todos" ? "" : "?categoria=" + encodeURIComponent(c)}" ${(!category && c === "Todos") || category === c ? 'aria-current="page"' : ""}>${c}</a>`).join("")}</nav><div class="grid">${filtered.map((c) => `<article class="clip ${c.id === e.featured ? "featured" : ""}" id="clip-${esc(c.id)}"><p class="eyebrow">${esc(c.category)}${c.id === e.featured ? " · El destacado" : ""}</p><span class="rank">${String(e.clips.indexOf(c) + 1).padStart(2, "0")}</span><h2>${esc(c.title)}</h2><p>${esc(c.text)}</p><p class="meta">Por <strong>${esc(c.streamer)}</strong> · Fuente: Twitch</p><a class="source" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">Ver en Twitch ↗<span class="meta"> · ${esc(c.streamer)}</span></a></article>`).join("")}</div>${!filtered.length ? '<p class="notice">No hay clips disponibles en esta selección. Consulta el archivo para descubrir otra edición.</p>' : ""}`;
 }
 async function body(request: Request): Promise<any> {
   if (!request.headers.get("Content-Type")?.startsWith("application/json"))
@@ -270,6 +260,10 @@ async function route(
   }
   if (request.method !== "GET" && request.method !== "HEAD")
     return json({ error: "Método no permitido" }, 405);
+  if (path === "/catalog.js")
+    return new Response(catalogScript, {
+      headers: { "Content-Type": "text/javascript; charset=utf-8" },
+    });
   if (path === "/style.css")
     return new Response(css, {
       headers: { "Content-Type": "text/css; charset=utf-8" },
@@ -308,17 +302,17 @@ async function route(
       const e: Edition = JSON.parse(row.published);
       return page(
         e.title,
-        editionView(e, url.searchParams.get("categoria")),
+        editionView(
+          e,
+          url.searchParams.get("categoria"),
+          url.searchParams.get("q") || "",
+        ),
         base + "/dia/" + e.date,
         e.intro,
       );
     }
     if (path === "/")
-      return page(
-        "El próximo gran momento",
-        `<section class="hero"><p class="eyebrow">GTA VI · Curación en español</p><h1>Menos ruido.<br>Mejores momentos.</h1><p class="lead">Fails, jugadas, detalles y reacciones. Los clips que merecen tu tiempo, con contexto y crédito a quien los crea.</p><aside class="notice">La primera selección está en camino. Solo publicamos cuando hay algo que merece la pena.</aside><a class="button" href="/archivo">Explorar el archivo ↗</a></section>`,
-        base + "/",
-      );
+      return page("El próximo gran momento", emptyView, base + "/");
   }
   return new Response("Edición no encontrada", { status: 404 });
 }
@@ -350,7 +344,7 @@ export async function handle(
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   headers.set(
     "Content-Security-Policy",
-    "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' https://static-cdn.jtvnw.net https://clips-media-assets2.twitch.tv https://clips-media-assets.twitch.tv; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   );
   headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   return new Response(request.method === "HEAD" ? null : response.body, {

@@ -1,5 +1,5 @@
 import type { Env } from "./auth";
-import { str, twitch } from "./model";
+import { str, twitch, thumbnail } from "./model";
 
 export const GAME_NAME = "Grand Theft Auto VI";
 export const limits = {
@@ -33,6 +33,7 @@ class ImportError extends Error {
   }
 }
 export interface Candidate {
+  thumbnail?: string | null;
   id: string;
   url: string;
   streamer: string;
@@ -178,8 +179,15 @@ function candidate(
       new Date(created).toISOString().slice(0, 19) !== v.created_at.slice(0, 19)
     )
       fail("invalid_clip");
+    let image: string | undefined;
+    try {
+      image = thumbnail(v.thumbnail_url);
+    } catch {
+      image = undefined;
+    }
     return {
       ...link,
+      thumbnail: image,
       streamer: str(v.broadcaster_name, 80),
       title: str(v.title, 120),
       language: v.language,
@@ -361,7 +369,7 @@ export async function importTwitch(
       const progress = { ...run, pages: run.pages + 1, saved: nextIds.size };
       const writes = clips.map((c) =>
         env.DB.prepare(
-          `INSERT INTO candidates(id,url,streamer,title,language,game_id,created_at,duration,views,observed_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${owned} ON CONFLICT(id) DO UPDATE SET url=excluded.url,streamer=excluded.streamer,title=excluded.title,language=excluded.language,game_id=excluded.game_id,created_at=excluded.created_at,duration=excluded.duration,views=excluded.views,observed_at=excluded.observed_at`,
+          `INSERT INTO candidates(id,url,streamer,title,language,game_id,created_at,duration,views,observed_at,thumbnail) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE ${owned} ON CONFLICT(id) DO UPDATE SET url=excluded.url,streamer=excluded.streamer,title=excluded.title,language=excluded.language,game_id=excluded.game_id,created_at=excluded.created_at,duration=excluded.duration,views=excluded.views,observed_at=excluded.observed_at,thumbnail=COALESCE(excluded.thumbnail,candidates.thumbnail)`,
         ).bind(
           c.id,
           c.url,
@@ -373,6 +381,7 @@ export async function importTwitch(
           c.duration,
           c.views,
           c.observed_at,
+          c.thumbnail || null,
           run.id,
           Date.now(),
         ),

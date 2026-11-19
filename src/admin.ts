@@ -12,14 +12,15 @@ const field = (label, name, value = "", type = "text") => {
   i.name = name;
   i.value = value;
   if (type !== "textarea") i.type = type;
-  i.required = true;
-  i.maxLength = { url: 300, streamer: 80, title: 120, text: 400 }[name] || 400;
+  i.required = name !== "thumbnail";
+  i.maxLength = { url: 300, thumbnail: 1500, streamer: 80, title: 120, text: 400 }[name] || 400;
   l.append(i);
   return l;
 };
 function add(c = {}) {
   const box = document.createElement("fieldset");
   box.className = "clip-input";
+  if (Number.isFinite(c.duration)) box.dataset.duration = String(c.duration);
   const legend = document.createElement("legend");
   legend.textContent = "Clip";
   box.append(legend);
@@ -28,6 +29,7 @@ function add(c = {}) {
     field("Streamer · crédito", "streamer", c.streamer),
     field("Título del clip", "title", c.title),
     field("Contexto editorial en español", "text", c.text, "textarea"),
+    field("Miniatura de Twitch (opcional)", "thumbnail", c.thumbnail, "url"),
   );
   const l = document.createElement("label");
   l.textContent = "Categoría";
@@ -73,14 +75,25 @@ function add(c = {}) {
     bar.append(b);
   }
   box.append(bar);
+  const sourceInput = box.querySelector('[name=url]');
+  let linkedSource = sourceInput.value.trim();
+  sourceInput.addEventListener('input', () => {
+    const next = sourceInput.value.trim();
+    if (next !== linkedSource) {
+      box.querySelector('[name=thumbnail]').value = '';
+      delete box.dataset.duration;
+      linkedSource = next;
+    }
+  });
   list.append(box);
 }
 function data() {
   const clips = [...list.children].map((box) => {
     const c = {};
-    ["url", "streamer", "title", "text", "category"].forEach(
+    ["url", "streamer", "title", "text", "category", "thumbnail"].forEach(
       (k) => (c[k] = box.querySelector("[name=" + k + "]").value),
     );
+    if (box.dataset.duration) c.duration = Number(box.dataset.duration);
     return c;
   });
   const selected = [...list.children].findIndex(
@@ -190,7 +203,7 @@ async function init() {
         const r = await fetch("/admin/candidate?id=" + encodeURIComponent(candidate));
         const c = await r.json();
         if (!r.ok) throw Error(c.error);
-        add({ url: c.url, streamer: c.streamer, title: c.title });
+        add({ url: c.url, streamer: c.streamer, title: c.title, thumbnail: c.thumbnail || "", duration: c.duration });
         message("Fuente importada. Escribe contexto original y revisa disponibilidad y derechos. No se ha guardado ni publicado.");
       } catch (e) { add(); message(e.message); }
     } else add();

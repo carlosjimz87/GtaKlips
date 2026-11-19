@@ -109,9 +109,11 @@ before(async () => {
   );
   const sql = (
     await Promise.all(
-      ["0001_editions.sql", "0002_twitch.sql"].map((name) =>
-        readFile("migrations/" + name, "utf8"),
-      ),
+      [
+        "0001_editions.sql",
+        "0002_twitch.sql",
+        "0003_candidate_thumbnails.sql",
+      ].map((name) => readFile("migrations/" + name, "utf8")),
     )
   ).join("\n");
   for (const runtime of [mf, local])

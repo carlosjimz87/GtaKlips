@@ -39,10 +39,10 @@ const runtime = new Miniflare(
     script: await readFile(".wrangler/e2e/worker.js", "utf8"),
     compatibilityDate: "2026-11-01",
     host: "127.0.0.1",
-    port: 8787,
+    port: 8788,
     d1Databases: ["DB"],
     bindings: {
-      PUBLIC_ORIGIN: "http://127.0.0.1:8787",
+      PUBLIC_ORIGIN: "http://127.0.0.1:8788",
       ACCESS_ISSUER: issuer,
       ACCESS_AUDIENCE: "e2e-editor",
       TWITCH_CLIENT_ID: "e2e-fixture-client",
@@ -105,9 +105,11 @@ const db = await runtime.getD1Database("DB");
 await db.exec(
   (
     await Promise.all(
-      ["0001_editions.sql", "0002_twitch.sql"].map((name) =>
-        readFile("migrations/" + name, "utf8"),
-      ),
+      [
+        "0001_editions.sql",
+        "0002_twitch.sql",
+        "0003_candidate_thumbnails.sql",
+      ].map((name) => readFile("migrations/" + name, "utf8")),
     )
   )
     .join(" ")
