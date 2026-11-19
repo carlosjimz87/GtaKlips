@@ -5,6 +5,8 @@ export const categories = [
   "Reacciones",
 ] as const;
 export interface Clip {
+  thumbnail?: string;
+  duration?: number;
   id: string;
   url: string;
   streamer: string;
@@ -55,6 +57,26 @@ export function twitch(v: unknown): { id: string; url: string } {
   if (!match) throw Error("Usa un enlace directo HTTPS a un clip de Twitch");
   return { id: match[1], url: `https://clips.twitch.tv/${match[1]}` };
 }
+export function thumbnail(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const u = new URL(str(value, 1500));
+  if (
+    u.protocol !== "https:" ||
+    u.username ||
+    u.password ||
+    u.port ||
+    u.hash ||
+    u.search ||
+    ![
+      "static-cdn.jtvnw.net",
+      "clips-media-assets2.twitch.tv",
+      "clips-media-assets.twitch.tv",
+    ].includes(u.hostname) ||
+    !/\.(?:jpg|jpeg|png|webp)$/i.test(u.pathname)
+  )
+    throw Error("Miniatura de Twitch no válida");
+  return u.href;
+}
 export function dateValid(v: unknown): v is string {
   return (
     typeof v === "string" &&
@@ -76,9 +98,20 @@ export function validate(v: any, publish = false): Edition {
     throw Error("Fecha o selección no válida (1–10 clips)");
   const clips: Clip[] = v.clips.map((c: any) => {
     const link = twitch(c.url);
+    const image = thumbnail(c.thumbnail);
+    if (
+      c.duration !== undefined &&
+      (typeof c.duration !== "number" ||
+        !Number.isFinite(c.duration) ||
+        c.duration <= 0 ||
+        c.duration > 3600)
+    )
+      throw Error("Duración no válida");
     if (!categories.includes(c.category)) throw Error("Categoría no válida");
     return {
       ...link,
+      ...(image ? { thumbnail: image } : {}),
+      ...(c.duration !== undefined ? { duration: c.duration } : {}),
       streamer: str(c.streamer, 80),
       title: str(c.title, 120),
       text: str(c.text, 400),

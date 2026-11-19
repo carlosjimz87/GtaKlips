@@ -257,6 +257,11 @@ before(async () => {
   await db.exec(
     (await readFile("migrations/0002_twitch.sql", "utf8")).replace(/\n/g, " "),
   );
+  await db.exec(
+    (
+      await readFile("migrations/0003_candidate_thumbnails.sql", "utf8")
+    ).replace(/\n/g, " "),
+  );
 });
 after(async () => {
   await mf?.dispose();
@@ -580,7 +585,11 @@ test("missing config skips network; configured category is verified by ID, never
     );
     try {
       const database = await runtime.getD1Database("DB");
-      for (const name of ["0001_editions.sql", "0002_twitch.sql"])
+      for (const name of [
+        "0001_editions.sql",
+        "0002_twitch.sql",
+        "0003_candidate_thumbnails.sql",
+      ])
         await database.exec(
           (await readFile("migrations/" + name, "utf8")).replace(/\n/g, " "),
         );
@@ -707,6 +716,75 @@ test("transport rejection is sanitized and does not change the public edition", 
           .first<any>()
       ).published,
       JSON.stringify(legacy),
+    );
+  } finally {
+    transport.mock.restore();
+  }
+});
+
+test("valid optional Twitch posters persist and an invalid replacement preserves the last safe image", async () => {
+  let image = "https://static-cdn.jtvnw.net/fixture/candidate.jpg";
+  const transport = mock.method(globalThis, "fetch", async (input: any) => {
+    const url = new URL(String(input));
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), {
+        headers: { "Content-Type": "application/json" },
+      });
+    if (url.hostname === "id.twitch.tv")
+      return json({
+        access_token: "fixture-poster-token",
+        token_type: "bearer",
+        expires_in: 3600,
+      });
+    if (url.pathname === "/helix/games")
+      return json({ data: [{ id: "123456", name: "Grand Theft Auto VI" }] });
+    return json({
+      data: [
+        {
+          id: "PosterCandidate",
+          url: "https://clips.twitch.tv/PosterCandidate",
+          broadcaster_name: "Poster creator",
+          title: "Poster test",
+          language: "es",
+          game_id: "123456",
+          created_at: new Date(Date.now() - 1000).toISOString(),
+          duration: 25,
+          view_count: 10,
+          thumbnail_url: image,
+        },
+      ],
+      pagination: {},
+    });
+  });
+  try {
+    const env = {
+      DB: db as unknown as Env["DB"],
+      PUBLIC_ORIGIN: base,
+      TWITCH_CLIENT_ID: "fixture-client",
+      TWITCH_CLIENT_SECRET: secret,
+    };
+    assert.equal((await importTwitch(env, "manual")).status, "success");
+    assert.equal(
+      (
+        await db
+          .prepare(
+            "SELECT thumbnail FROM candidates WHERE id='PosterCandidate'",
+          )
+          .first<any>()
+      ).thumbnail,
+      image,
+    );
+    image = "https://evil.example/stolen.jpg";
+    assert.equal((await importTwitch(env, "manual")).status, "success");
+    assert.equal(
+      (
+        await db
+          .prepare(
+            "SELECT thumbnail FROM candidates WHERE id='PosterCandidate'",
+          )
+          .first<any>()
+      ).thumbnail,
+      "https://static-cdn.jtvnw.net/fixture/candidate.jpg",
     );
   } finally {
     transport.mock.restore();
