@@ -248,7 +248,20 @@ test("móvil estrecho conserva la fuente y móvil amplio requiere toque; fallo c
         el.closest("article")!.getBoundingClientRect().top,
     );
     expect(offsetAfter).toBeCloseTo(offsetBefore, 0);
-    await toggle.tap();
+    await expect(
+      page
+        .frameLocator("#clip-PreviewClip0 iframe")
+        .getByText("Reproductor simulado de Twitch"),
+    ).toBeVisible();
+    await expect(toggle).toHaveText("Detener vista previa");
+    await expect(toggle).toBeInViewport();
+    const stopButton = (await toggle.boundingBox())!;
+    // Send the physical touch at the visible control. Locator.tap may scroll and
+    // retry after the offscreen guard has already stopped and relabelled it.
+    await page.touchscreen.tap(
+      stopButton.x + stopButton.width / 2,
+      stopButton.y + stopButton.height / 2,
+    );
     await expect(page.locator("iframe")).toHaveCount(0);
     await page.locator(".hero-preview").scrollIntoViewIfNeeded();
     await ctx.route("https://clips.twitch.tv/embed?**", (route) =>
