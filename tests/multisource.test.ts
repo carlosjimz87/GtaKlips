@@ -1086,3 +1086,60 @@ test("committed replies drain before a failing poll and remain delivered", async
   );
   await runner.internal("release");
 });
+
+test("exact shared X URL is captured by Telegram then prepared without publication", async () => {
+  const db = await runtime.getD1Database("DB");
+  await bridge("lease");
+  const date = "2039-07-01",
+    id = "x:2123221655715500442";
+  await update(600, { message: message("/edicion " + date) });
+  assert.equal(
+    (
+      await update(601, {
+        message: message(
+          "https://x.com/LaTwitchance/status/2123221655715500442?a=mT-Cem3lEJP2T577VF0&s=35 ",
+        ),
+      })
+    ).status,
+    200,
+  );
+  const captured = await db
+    .prepare("SELECT * FROM manual_candidates WHERE id=?")
+    .bind(id)
+    .first<any>();
+  assert.equal(
+    captured.url,
+    "https://x.com/LaTwitchance/status/2123221655715500442",
+  );
+  const payload = JSON.parse(
+    (await db
+      .prepare("SELECT payload FROM telegram_outbox WHERE update_id=601")
+      .first<string>("payload"))!,
+  );
+  assert.match(payload.text, /Guardados: 1/);
+  await update(602, {
+    callback_query: {
+      from: { id: 102 },
+      message: message("bot reply"),
+      data: payload.reply_markup.inline_keyboard[0][0].callback_data,
+    },
+  });
+  assert.equal(
+    (await update(603, { message: message("/preparar") })).status,
+    200,
+  );
+  const selection = await db
+    .prepare("SELECT * FROM manual_selections WHERE date=?")
+    .bind(date)
+    .first<any>();
+  assert.equal(selection.prepared, 1);
+  assert.deepEqual(JSON.parse(selection.ids), [id]);
+  assert.equal(
+    await db
+      .prepare("SELECT count(*) AS n FROM editions WHERE date=?")
+      .bind(date)
+      .first("n"),
+    0,
+  );
+  await bridge("release");
+});

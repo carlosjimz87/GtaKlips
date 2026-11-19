@@ -10,6 +10,14 @@ export function source(value: unknown): {
   const u = new URL(value);
   if (u.protocol !== "https:" || u.username || u.password || u.port || u.hash)
     throw Error("URL de fuente no válida");
+  const xHosts = [
+    "x.com",
+    "www.x.com",
+    "twitter.com",
+    "www.twitter.com",
+    "mobile.twitter.com",
+    "m.twitter.com",
+  ];
   const tracking = new Set([
     "si",
     "feature",
@@ -28,6 +36,7 @@ export function source(value: unknown): {
   for (const key of u.searchParams.keys())
     if (
       !tracking.has(key) &&
+      !(key === "a" && xHosts.includes(u.hostname)) &&
       !(
         key === "v" &&
         ["youtube.com", "www.youtube.com", "m.youtube.com"].includes(
@@ -73,14 +82,7 @@ export function source(value: unknown): {
     sourceId = m![1];
     url = `https://www.youtube.com/watch?v=${sourceId}`;
   } else if (
-    [
-      "x.com",
-      "www.x.com",
-      "twitter.com",
-      "www.twitter.com",
-      "mobile.twitter.com",
-      "m.twitter.com",
-    ].includes(u.hostname) &&
+    xHosts.includes(u.hostname) &&
     (m = /^\/([A-Za-z0-9_]{1,15})\/status\/([1-9][0-9]{0,19})\/?$/.exec(
       u.pathname,
     ))

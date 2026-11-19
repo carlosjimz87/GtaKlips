@@ -257,3 +257,43 @@ for (const width of [320, 390, 768, 1440])
       await context.close();
     }
   });
+
+test("shared X mobile URL can be captured, selected, prepared and loaded into editor", async ({
+  page,
+  request,
+}) => {
+  const date = "2094-05-01";
+  await page.setExtraHTTPHeaders(await auth());
+  await page.goto("/admin/inbox?date=" + date);
+  await page
+    .getByLabel("Enlaces (uno por línea, máximo diez)")
+    .fill(
+      "https://x.com/LaTwitchance/status/2123221655715500442?a=mT-Cem3lEJP2T577VF0&s=35",
+    );
+  await page
+    .getByRole("button", { name: "Guardar fuentes", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("Guardados: 1");
+  const candidate = page.locator('[data-candidate="x:2123221655715500442"]');
+  await expect(
+    candidate.getByRole("link", { name: "Revisar original" }),
+  ).toHaveAttribute(
+    "href",
+    "https://x.com/LaTwitchance/status/2123221655715500442",
+  );
+  await candidate
+    .getByRole("button", { name: "Seleccionar", exact: true })
+    .click();
+  await expect(page.locator("#selection h2")).toContainText("1/10");
+  await page
+    .getByRole("button", { name: "Preparar selección", exact: true })
+    .click();
+  await page.getByRole("link", { name: "Cargar selección en editor" }).click();
+  await expect(page.locator('.clip-input [name="url"]')).toHaveValue(
+    "https://x.com/LaTwitchance/status/2123221655715500442",
+  );
+  await expect(page.getByRole("status")).toContainText(
+    "No se ha guardado ni publicado",
+  );
+  expect((await request.get("/dia/" + date)).status()).toBe(404);
+});
