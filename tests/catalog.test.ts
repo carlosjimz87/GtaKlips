@@ -156,3 +156,23 @@ test("search and categories combine without changing canonical or exposing unpub
     ).includes("PRIVATE CATALOG DRAFT"),
   );
 });
+
+test("preview embeds are deferred, escaped and confined to the official frame host", async () => {
+  const response = await runtime.dispatchFetch(
+    "https://example.com/dia/" + edition.date,
+  );
+  const html = await response.text();
+  assert.ok(html.includes('data-preview="Catalog2"'));
+  assert.ok(html.includes("data-preview-hero"));
+  assert.ok(!html.includes("<iframe"));
+  const csp = response.headers.get("Content-Security-Policy")!;
+  assert.ok(csp.includes("frame-src https://clips.twitch.tv;"));
+  assert.ok(csp.includes("script-src 'self';"));
+  assert.ok(csp.includes("frame-ancestors 'none'"));
+  assert.ok(!csp.includes("frame-src *"));
+  assert.ok(
+    response.headers
+      .get("Permissions-Policy")
+      ?.includes('autoplay=(self "https://clips.twitch.tv")'),
+  );
+});

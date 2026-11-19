@@ -378,4 +378,33 @@ button:focus-visible {
  .billboard-compact { min-height: 430px !important; }.billboard-compact .billboard-content { padding-top: 40px; }
 }
 @media (prefers-reduced-motion:reduce) { .catalog-card,.play-disc,.genre-card img { transition: none !important; } html { scroll-behavior: auto; } }
+
+/* Official clip players occupy their own unobscured space. */
+.public-page .billboard { flex-wrap: wrap; gap: 24px; padding-right: clamp(20px,4.5vw,80px); }
+.billboard-content { flex: 1 1 480px; width: auto; max-width: 820px; }
+.hero-preview { flex: 1 1 420px; min-width: 0; max-width: 640px; margin: 32px 0 60px; border: 1px solid #343b42; border-radius: 8px; background: #11151b; overflow: hidden; }
+.preview-stage { position: relative; width: 100%; height: max(300px,22vw); max-height: 360px; background: #0b0e13; }
+.preview-stage > img { width: 100%; height: 100%; object-fit: cover; }
+.preview-placeholder { position: absolute; inset: auto 16px 16px; color: #fff; font-size: 14px; }
+.preview-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.preview-stage:has(iframe) > img, .preview-stage:has(iframe) > .preview-placeholder { display: none; }
+.preview-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px; }
+.preview-toolbar[hidden], .preview-stage[hidden] { display: none; }
+.public-page .preview-toolbar button { font-size: 14px; padding: 9px 12px; border-color: #566344; background: #263321; color: #ecf5df; }
+.preview-status { font-size: 12px; line-height: 1.5; color: #b8bfcb; flex: 1 1 140px; }
+.preview-source { display: block; padding: 0 12px 12px; font-size: 14px; color: #e8f2d4; }
+.catalog-rail { display: flex; align-items: flex-start; }
+.public-page .catalog-card { flex: 0 0 clamp(255px,24vw,340px); }
+.clip-link { height: auto; }
+.public-page .catalog-card.previewing { flex-basis: 432px; }
+.catalog-card .preview-stage { height: 300px; }
+.public-page .catalog-card { display: flex; flex-direction: column; }
+.catalog-card.previewing .preview-stage { order: 0; }
+.catalog-card.previewing .preview-toolbar { order: 1; }
+.catalog-card.previewing .clip-link { order: 2; }
+
+.catalog-card.previewing .clip-link .poster { display: none; }
+@media (max-width:1100px) { .hero-preview { flex-basis: 100%; margin: 0 0 40px clamp(20px,4.5vw,80px); }.billboard-content { max-width: none; padding-bottom: 12px; } }
+@media (max-width:650px) { .public-page .catalog-card { flex-basis: min(78vw,310px); }.hero-preview { margin: 0 0 24px 20px; }.public-page .billboard { gap: 16px; }.billboard-content { flex-basis: 100%; } }
+@media (max-width:431px) { .hero-preview { display: none; }.catalog-card .preview-toolbar { display: none; } }
 `;
