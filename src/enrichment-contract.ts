@@ -9,6 +9,7 @@ export const enrichmentCategories = [
 ];
 export interface Extraction {
   postId: string;
+  provider?: "x" | "youtube" | "twitch";
   text: string;
   author: string;
   handle: string;
@@ -48,7 +49,13 @@ function bounded(v: unknown, max: number, empty = true): string {
 export function extraction(v: any): Extraction {
   if (
     !v ||
-    !/^\d{1,25}$/.test(v.postId) ||
+    (v.provider !== undefined &&
+      !["x", "youtube", "twitch"].includes(v.provider)) ||
+    !(v.provider === "youtube"
+      ? /^[A-Za-z0-9_-]{11}$/.test(v.postId)
+      : v.provider === "twitch"
+        ? /^[A-Za-z0-9_-]{1,100}$/.test(v.postId)
+        : /^\d{1,25}$/.test(v.postId)) ||
     !Number.isInteger(v.commentsRequested) ||
     v.commentsRequested < 0 ||
     v.commentsRequested > 50 ||
@@ -71,6 +78,7 @@ export function extraction(v: any): Extraction {
     throw Error("Invalid dimensions");
   return {
     postId: v.postId,
+    ...(v.provider ? { provider: v.provider } : {}),
     text: bounded(v.text, 6000),
     author: bounded(v.author, 100),
     handle: bounded(v.handle, 30),

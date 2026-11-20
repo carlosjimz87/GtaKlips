@@ -355,42 +355,36 @@ test("edit/media guidance, max-ten bound and invalid URL rejection", async () =>
     /Rechazados: 1/,
   );
 });
-test("callbacks select privately, stale revisions reject; context and date commands are durable", async () => {
+test("automatic selection and guarded text editing stay private; stale controls reject", async () => {
   const db = await runtime.getD1Database("DB");
-  const payload = JSON.parse(
-    (await db
-      .prepare("SELECT payload FROM telegram_outbox WHERE update_id=2")
-      .first<string>("payload"))!,
+  const payload = async (id: number) =>
+    JSON.parse(
+      (await db
+        .prepare("SELECT payload FROM telegram_outbox WHERE update_id=?")
+        .bind(id)
+        .first<string>("payload"))!,
+    );
+  const tap = (id: number, data: string) =>
+    update(id, {
+      callback_query: { from: { id: 102 }, message: message("reply"), data },
+    });
+  await update(7, { message: message("/seleccion") });
+  const edit = (await payload(7)).reply_markup.inline_keyboard[0][0]
+    .callback_data;
+  await tap(8, edit);
+  await tap(
+    9,
+    (await payload(8)).reply_markup.inline_keyboard[2][0].callback_data,
   );
-  const callback = (data: string) => ({
-    callback_query: { from: { id: 102 }, message: message("bot reply"), data },
-  });
-  const toggle = payload.reply_markup.inline_keyboard[0][0].callback_data;
-  assert.equal((await update(7, callback(toggle))).status, 200);
-  await update(8, callback(toggle));
-  assert.match(
-    (await db
-      .prepare("SELECT payload FROM telegram_outbox WHERE update_id=8")
-      .first<string>("payload"))!,
-    /caducado/,
-  );
-  await update(9, { message: message("/seleccion") });
-  const selectionReply = JSON.parse(
-    (await db
-      .prepare("SELECT payload FROM telegram_outbox WHERE update_id=9")
-      .first<string>("payload"))!,
-  );
-  await update(
-    10,
-    callback(selectionReply.reply_markup.inline_keyboard[0][2].callback_data),
-  );
-  await update(11, { message: message("Contexto propio revisable") });
+  await update(10, { message: message("Contexto propio revisable") });
   assert.equal(
     await db
       .prepare("SELECT text FROM manual_candidates WHERE id='Five1'")
       .first("text"),
     "Contexto propio revisable",
   );
+  await tap(11, edit);
+  assert.match((await payload(11)).text, /cambió/);
   await update(12, { message: message("/edicion 2039-02-03") });
   assert.equal(
     await db.prepare("SELECT date FROM telegram_receiver").first("date"),
@@ -714,26 +708,22 @@ test("bot five-source selection, reordering, category, prepare and cancel never 
     "https://youtu.be/abcdefghijl",
     "https://x.com/demo/status/123",
   ];
-  for (const url of urls) {
-    const r = await send(url);
-    await click(r.reply_markup.inline_keyboard[0][0].callback_data);
-  }
-  let selected = JSON.parse(
+  for (const url of urls) await send(url);
+  const selected = JSON.parse(
     (await db
       .prepare("SELECT ids FROM manual_selections WHERE date='2039-05-01'")
       .first<string>("ids"))!,
   );
   assert.equal(selected.length, 5);
   let r = await send("/seleccion");
-  await click(r.reply_markup.inline_keyboard[9][1].callback_data);
-  selected = JSON.parse(
+  await click(r.reply_markup.inline_keyboard[0][0].callback_data);
+  const menu = JSON.parse(
     (await db
-      .prepare("SELECT ids FROM manual_selections WHERE date='2039-05-01'")
-      .first<string>("ids"))!,
+      .prepare("SELECT payload FROM telegram_outbox WHERE update_id=?")
+      .bind(sequence - 1)
+      .first<string>("payload"))!,
   );
-  assert.equal(selected[3], "x:123");
-  r = await send("/seleccion");
-  await click(r.reply_markup.inline_keyboard[0][1].callback_data);
+  await click(menu.reply_markup.inline_keyboard[3][1].callback_data);
   assert.equal(
     await db
       .prepare("SELECT category FROM manual_candidates WHERE id='Five1'")
@@ -741,13 +731,18 @@ test("bot five-source selection, reordering, category, prepare and cancel never 
     "Jugadas",
   );
   r = await send("/seleccion");
-  await click(r.reply_markup.inline_keyboard[0][2].callback_data);
+  await click(r.reply_markup.inline_keyboard[0][0].callback_data);
+  const input = JSON.parse(
+    (await db
+      .prepare("SELECT payload FROM telegram_outbox WHERE update_id=?")
+      .bind(sequence - 1)
+      .first<string>("payload"))!,
+  );
+  await click(input.reply_markup.inline_keyboard[2][0].callback_data);
   await send("/cancelar");
   assert.equal(
-    await db
-      .prepare("SELECT pending_candidate FROM telegram_receiver")
-      .first("pending_candidate"),
-    null,
+    await db.prepare("SELECT count(*) n FROM auto_input").first("n"),
+    0,
   );
   await send("/preparar");
   assert.equal(
@@ -879,18 +874,10 @@ test("one five-link message stays selectable through fresh batch controls and li
     "https://youtu.be/abcdefghijn",
     "https://x.com/demo/status/987654321",
   ];
-  let response = await deliver({ message: message(urls.join("\n")) });
+  await deliver({ message: message(urls.join("\n")) });
+  let response = await deliver({ message: message("/seleccion") });
   const stale = response.reply_markup.inline_keyboard[0][0].callback_data;
-  for (let i = 0; i < 5; i++) {
-    response = await tap(
-      response.reply_markup.inline_keyboard[i * 2][0].callback_data,
-    );
-    assert.equal(response.reply_markup.inline_keyboard.length, 10);
-    const stored = await db
-      .prepare("SELECT ids FROM manual_selections WHERE date='2039-08-01'")
-      .first<string>("ids");
-    assert.equal(JSON.parse(stored!).length, i + 1);
-  }
+  assert.equal(response.reply_markup.inline_keyboard.length, 6);
   const selection = await db
     .prepare("SELECT * FROM manual_selections WHERE date='2039-08-01'")
     .first<any>();
@@ -901,9 +888,8 @@ test("one five-link message stays selectable through fresh batch controls and li
     "youtube:abcdefghijn",
     "x:987654321",
   ]);
-  // Candidate-only changes refresh every board member without invalidating the list.
   response = await tap(
-    response.reply_markup.inline_keyboard[0][1].callback_data,
+    response.reply_markup.inline_keyboard[0][0].callback_data,
   );
   assert.equal(
     await db
@@ -911,9 +897,7 @@ test("one five-link message stays selectable through fresh batch controls and li
       .first("revision"),
     selection.revision,
   );
-  const contextToken =
-    response.reply_markup.inline_keyboard[0][2].callback_data;
-  await tap(contextToken);
+  await tap(response.reply_markup.inline_keyboard[2][0].callback_data);
   const before = await db
     .prepare("SELECT text FROM manual_candidates WHERE id='BatchOne'")
     .first("text");
@@ -929,9 +913,7 @@ test("one five-link message stays selectable through fresh batch controls and li
       .first(),
   );
   assert.equal(
-    await db
-      .prepare("SELECT pending_candidate FROM telegram_receiver")
-      .first("pending_candidate"),
+    await db.prepare("SELECT candidate FROM auto_input").first("candidate"),
     "BatchOne",
   );
   assert.equal(
@@ -949,7 +931,7 @@ test("one five-link message stays selectable through fresh batch controls and li
       .first("text"),
     "El contexto sigue pendiente hasta este texto editorial",
   );
-  assert.match((await tap(stale)).text, /caducado/);
+  assert.match((await tap(stale)).text, /cambió/);
   assert.equal(
     await db
       .prepare("SELECT count(*) FROM editions WHERE date='2039-08-01'")
@@ -1117,13 +1099,7 @@ test("exact shared X URL is captured by Telegram then prepared without publicati
       .first<string>("payload"))!,
   );
   assert.match(payload.text, /Guardados: 1/);
-  await update(602, {
-    callback_query: {
-      from: { id: 102 },
-      message: message("bot reply"),
-      data: payload.reply_markup.inline_keyboard[0][0].callback_data,
-    },
-  });
+  await update(602, { message: message("/seleccion") });
   assert.equal(
     (await update(603, { message: message("/preparar") })).status,
     200,
