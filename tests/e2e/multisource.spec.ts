@@ -80,17 +80,15 @@ test("five links through private inbox, prepared selection, editor and explicit 
       .fill("Fuente editorial " + i);
     await form.getByLabel("Crédito del creador").fill("Creador " + i);
     await form.getByLabel("Contexto editorial").fill("Contexto propio " + i);
+    await form
+      .getByLabel("Categoría", { exact: true })
+      .selectOption("Detalles");
     await form.getByRole("button", { name: "Guardar revisión" }).click();
-    await expect(
-      page
-        .locator('[data-candidate="' + id + '"]')
-        .getByLabel("Título", { exact: true }),
-    ).toHaveValue("Fuente editorial " + i);
-    await page
-      .locator('[data-candidate="' + id + '"]')
-      .getByRole("button", { name: "Seleccionar", exact: true })
-      .click();
-    await expect(page.locator("#selection h2")).toContainText(i + 1 + "/10");
+    // The heading is server-rendered, so it only changes once the save has reloaded the page.
+    await expect(page.locator('[data-candidate="' + id + '"] h2')).toHaveText(
+      "Fuente editorial " + i,
+    );
+    await expect(page.locator("#selection h2")).toContainText("5/10");
   }
   await page
     .getByRole("button", { name: "Preparar selección", exact: true })
@@ -281,9 +279,9 @@ test("shared X mobile URL can be captured, selected, prepared and loaded into ed
     "href",
     "https://x.com/LaTwitchance/status/2123221655715500442",
   );
-  await candidate
-    .getByRole("button", { name: "Seleccionar", exact: true })
-    .click();
+  await expect(
+    candidate.getByRole("button", { name: "Quitar de selección", exact: true }),
+  ).toBeVisible();
   await expect(page.locator("#selection h2")).toContainText("1/10");
   await page
     .getByRole("button", { name: "Preparar selección", exact: true })

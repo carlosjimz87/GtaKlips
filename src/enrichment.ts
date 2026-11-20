@@ -1,3 +1,6 @@
+import { candidateWrite, getCandidate, metadata, clearGuard } from "./inbox";
+import { protectedPatch, missingFields } from "./auto-state";
+import { twitchMetadata } from "./importer";
 import type { Env } from "./auth";
 import type { ManualCandidate } from "./inbox";
 import {
@@ -9,7 +12,7 @@ import {
 } from "./enrichment-contract";
 export function queueEnrichment(env: Env, id: string) {
   return env.DB.prepare(
-    "INSERT INTO enrichment_jobs(candidate,updated_at) SELECT id,? FROM manual_candidates WHERE id=? AND provider='x' ON CONFLICT(candidate) DO NOTHING",
+    "INSERT INTO enrichment_jobs(candidate,updated_at) SELECT id,? FROM manual_candidates WHERE id=? AND state!='discarded' ON CONFLICT(candidate) DO NOTHING",
   ).bind(Date.now(), id);
 }
 export async function enrichmentStatus(env: Env, id: string) {
@@ -24,6 +27,7 @@ export async function enrichmentStatus(env: Env, id: string) {
     .bind(id)
     .first<{ proposal: string; created_at: number }>();
   return {
+    candidate: await getCandidate(env, id),
     job,
     proposal: result ? proposal(JSON.parse(result.proposal)) : null,
     created_at: result?.created_at,
@@ -47,7 +51,7 @@ export function missingPatch(c: ManualCandidate, p: Proposal) {
   if (p.suggestion) {
     for (const k of ["title", "streamer", "text"] as const)
       if (!c[k] && p.suggestion[k]) patch[k] = p.suggestion[k];
-    if (c.revision === 1 && c.category === "Fails")
+    if (!c.category || (c.revision === 1 && c.category === "Fails"))
       patch.category = p.suggestion.category;
   }
   if (
@@ -130,6 +134,11 @@ export async function enrichmentBridge(request: Request, env: EnrichmentEnv) {
       action = new URL(request.url).pathname.split("/").at(-1);
     if (action === "claim") {
       await env.DB.prepare(
+        "INSERT INTO processing_health VALUES(1,?,?) ON CONFLICT(singleton) DO UPDATE SET last_seen=excluded.last_seen,model_configured=excluded.model_configured",
+      )
+        .bind(now, Number(v.modelConfigured === true))
+        .run();
+      await env.DB.prepare(
         "UPDATE enrichment_jobs SET status=CASE WHEN attempts>=3 THEN 'failed' ELSE 'queued' END,token=NULL,error='Proceso interrumpido o tiempo agotado',updated_at=? WHERE status='running' AND lease_until<=?",
       )
         .bind(now, now)
@@ -141,14 +150,14 @@ export async function enrichmentBridge(request: Request, env: EnrichmentEnv) {
         .first<{ candidate: string; token: string }>();
       if (!job) return reply({ job: null });
       const c = await env.DB.prepare(
-        "SELECT url,source_id FROM manual_candidates WHERE id=?",
+        "SELECT * FROM manual_candidates WHERE id=?",
       )
         .bind(job.candidate)
         .first();
       return reply({ job: { ...job, ...c } });
     }
     if (
-      !["finish", "fail"].includes(action || "") ||
+      !["finish", "fail", "metadata", "complete"].includes(action || "") ||
       typeof v.candidate !== "string" ||
       typeof v.token !== "string"
     )
@@ -162,6 +171,39 @@ export async function enrichmentBridge(request: Request, env: EnrichmentEnv) {
     const guard = env.DB.prepare(
       "INSERT INTO manual_write_guard VALUES(1,EXISTS(SELECT 1 FROM enrichment_jobs WHERE candidate=? AND token=? AND status='running' AND lease_until>?))",
     ).bind(v.candidate, v.token, now);
+    if (action === "metadata") {
+      const before = await getCandidate(env, v.candidate);
+      if (!before) return reply({}, 404);
+      const data =
+        before.provider === "twitch"
+          ? await twitchMetadata(env, before.source_id)
+          : await metadata(before);
+      const current = await getCandidate(env, v.candidate);
+      if (!current) return reply({}, 404);
+      const patch = protectedPatch(current, data);
+      if (Object.keys(patch).length)
+        await env.DB.batch([
+          guard,
+          clearGuard(env),
+          candidateWrite(env, current, patch, current.provider + " metadata"),
+        ]);
+      return reply({
+        candidate: await getCandidate(env, v.candidate),
+        metadata: data,
+      });
+    }
+    if (action === "complete") {
+      const c = await getCandidate(env, v.candidate);
+      if (!c || missingFields(c).length) return reply({}, 400);
+      await env.DB.batch([
+        guard,
+        clearGuard(env),
+        env.DB.prepare(
+          "UPDATE enrichment_jobs SET status='complete',token=NULL,lease_until=0,error='',updated_at=? WHERE candidate=? AND token=?",
+        ).bind(now, v.candidate, v.token),
+      ]);
+      return reply({ ok: true });
+    }
     if (action === "fail") {
       await env.DB.batch([
         guard,
@@ -180,12 +222,22 @@ export async function enrichmentBridge(request: Request, env: EnrichmentEnv) {
     }
     const p = proposal(v.proposal),
       writes: D1PreparedStatement[] = [];
-    const c = await env.DB.prepare(
-      "SELECT source_id FROM manual_candidates WHERE id=?",
-    )
+    const c = await env.DB.prepare("SELECT * FROM manual_candidates WHERE id=?")
       .bind(v.candidate)
-      .first<{ source_id: string }>();
-    if (c?.source_id !== p.extraction.postId) return reply({}, 400);
+      .first<ManualCandidate>();
+    if (
+      !c ||
+      c.source_id !== p.extraction.postId ||
+      c.provider !== (p.extraction.provider || "x")
+    )
+      return reply({}, 400);
+    if (c.automatic && c.state !== "discarded") {
+      const patch = protectedPatch(c, missingPatch(c, p));
+      for (const k of ["title", "streamer", "text", "category"] as const)
+        if (patch[k] && !p.suggestion?.evidence[k]) delete patch[k];
+      if (Object.keys(patch).length)
+        writes.push(candidateWrite(env, c, patch, "enrich (propuesta)"));
+    }
     if (p.thumbnail) {
       if (
         typeof v.jpeg !== "string" ||

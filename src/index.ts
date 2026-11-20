@@ -1,3 +1,4 @@
+import { editionWrite } from "./edition-store";
 import { enrichmentAsset, enrichmentStatus } from "./enrichment";
 import { source } from "./source";
 import {
@@ -11,7 +12,7 @@ import { editionView, emptyView, catalogScript } from "./catalog";
 import { importTwitch, type Candidate } from "./importer";
 import { importPage, importScript } from "./import-admin";
 import { authorized, type Env } from "./auth";
-import { dateValid, esc, post, validate, type Edition } from "./model";
+import { dateValid, esc, post, type Edition } from "./model";
 import { css } from "./style";
 import { adminScript, editor } from "./admin";
 interface Row {
@@ -184,6 +185,12 @@ async function route(
         )
           .bind(v.state, v.id)
           .run();
+        if (result.meta.changes)
+          await env.DB.prepare(
+            "UPDATE manual_candidates SET state=?,revision=revision+1 WHERE id=? AND capture_origin='discovery'",
+          )
+            .bind(v.state === "rejected" ? "discarded" : "pending", v.id)
+            .run();
         return result.meta.changes
           ? json({ ok: true })
           : json({ error: "Candidato no encontrado" }, 404);
@@ -191,35 +198,12 @@ async function route(
       if (!Number.isSafeInteger(v.revision) || v.revision < 0)
         throw Error("Revisión no válida");
       if (path === "/admin/save" || path === "/admin/publish") {
-        const e = validate(v.edition, path.endsWith("publish")),
-          serialized = JSON.stringify(e);
-        let statement: D1PreparedStatement;
-        if (v.revision === 0) {
-          statement = env.DB.prepare(
-            "INSERT INTO editions(date,draft,published,published_at) VALUES(?,?,?,?) ON CONFLICT(date) DO NOTHING RETURNING revision",
-          ).bind(
-            e.date,
-            serialized,
-            path.endsWith("publish") ? serialized : null,
-            path.endsWith("publish") ? new Date().toISOString() : null,
-          );
-        } else {
-          statement = env.DB.prepare(
-            path.endsWith("publish")
-              ? "UPDATE editions SET draft=?, published=?, published_at=?, revision=revision+1 WHERE date=? AND revision=? RETURNING revision"
-              : "UPDATE editions SET draft=?, revision=revision+1 WHERE date=? AND revision=? RETURNING revision",
-          ).bind(
-            ...(path.endsWith("publish")
-              ? [
-                  serialized,
-                  serialized,
-                  new Date().toISOString(),
-                  e.date,
-                  v.revision,
-                ]
-              : [serialized, e.date, v.revision]),
-          );
-        }
+        const statement = editionWrite(
+          env,
+          v.edition,
+          v.revision,
+          path.endsWith("publish"),
+        );
         // A complete ordered snapshot is committed in one D1 transaction.
         const [write] = await env.DB.batch<{ revision: number }>([statement]);
         const result = write.results[0];

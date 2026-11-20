@@ -1,3 +1,4 @@
+import { missingFields } from "./auto-state";
 // Node-only local public collector and inference. Never imported by the Worker entry.
 import {
   chromium,
@@ -38,7 +39,6 @@ export function enrichmentConfig(env: NodeJS.ProcessEnv): EnrichmentConfig {
     !["127.0.0.1", "localhost", "[::1]"].includes(u.hostname) ||
     u.origin !== origin ||
     secret.length < 32 ||
-    !model ||
     model.length > 160 ||
     !Number.isInteger(comments) ||
     comments < 0 ||
@@ -610,18 +610,55 @@ export function createEnrichmentRunner(
         },
         body: JSON.stringify(payload),
         redirect: "error",
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(15000),
       }),
     );
   return {
     async cycle() {
-      const { job } = await call("claim");
+      const { job } = await call("claim", { modelConfigured: !!config.model });
       if (!job) return false;
       try {
-        const { extraction: e, jpeg } = await collect(job.url, config.comments);
+        let c = job;
+        if (job.automatic) {
+          const result = await call("metadata", {
+            candidate: job.candidate,
+            token: job.token,
+          });
+          c = result.candidate;
+          if (!missingFields(c).length) {
+            await call("complete", {
+              candidate: job.candidate,
+              token: job.token,
+            });
+            return true;
+          }
+        }
+        const { extraction: e, jpeg } =
+          c.provider && c.provider !== "x"
+            ? {
+                extraction: extraction({
+                  provider: c.provider,
+                  postId: c.source_id,
+                  text: c.title || "",
+                  author: c.streamer || "",
+                  handle: "",
+                  tags: [],
+                  comments: [],
+                  commentsRequested: 0,
+                  commentsReason:
+                    "No se consultan comentarios de este proveedor",
+                  width: 0,
+                  height: 0,
+                  dimensionSource: "unavailable",
+                  imageType: "unavailable",
+                }),
+                jpeg: null,
+              }
+            : await collect(job.url, config.comments);
         let s = null;
         try {
-          s = await inferLocal(e, config.model, request);
+          if (config.model && e.text.trim())
+            s = await inferLocal(e, config.model, request);
         } catch {
           /* preserve extraction honestly */
         }

@@ -201,6 +201,48 @@ function candidate(
     return fail("invalid_clip");
   }
 }
+// Single-clip metadata uses the same bounded fixed-host client as discovery.
+export async function twitchMetadata(
+  env: Env,
+  id: string,
+): Promise<Record<string, string>> {
+  if (!env.TWITCH_CLIENT_ID || !env.TWITCH_CLIENT_SECRET) return {};
+  try {
+    const token = await upstream(new URL("https://id.twitch.tv/oauth2/token"), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: env.TWITCH_CLIENT_ID,
+        client_secret: env.TWITCH_CLIENT_SECRET,
+        grant_type: "client_credentials",
+      }),
+    });
+    if (typeof token.access_token !== "string") return {};
+    const url = new URL("https://api.twitch.tv/helix/clips");
+    url.searchParams.set("id", id);
+    const result = await upstream(url, {
+      headers: {
+        "Client-ID": env.TWITCH_CLIENT_ID,
+        Authorization: "Bearer " + token.access_token,
+      },
+    });
+    const clip = result.data?.[0];
+    if (!clip || clip.id !== id || twitch(clip.url).id !== id) return {};
+    const out: Record<string, string> = {
+      title: str(clip.title, 120),
+      streamer: str(clip.broadcaster_name, 80),
+    };
+    try {
+      const image = thumbnail(clip.thumbnail_url);
+      if (image) out.thumbnail = image;
+    } catch {
+      /* optional */
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
 const owned =
   "EXISTS (SELECT 1 FROM import_lease WHERE name='twitch' AND owner=? AND expires_at>?)";
 export async function importTwitch(
@@ -369,7 +411,7 @@ export async function importTwitch(
       // pageSize is fixed at 100: this query stays within D1's 100 bindings.
       const manual = clips.length
         ? await env.DB.prepare(
-            `SELECT source_id FROM manual_candidates WHERE provider='twitch' AND source_id IN (${clips.map(() => "?").join(",")})`,
+            `SELECT source_id FROM manual_candidates WHERE provider='twitch' AND capture_origin!='discovery' AND source_id IN (${clips.map(() => "?").join(",")})`,
           )
             .bind(...clips.map((c) => c.id))
             .all<{ source_id: string }>()
@@ -398,6 +440,41 @@ export async function importTwitch(
           Date.now(),
         ),
       );
+      // Discovery uses the same processing queue, without changing the owner's selection.
+      for (const c of importedClips) {
+        writes.push(
+          env.DB.prepare(
+            `INSERT INTO manual_candidates(id,provider,source_id,url,captured_date,created_at,title,streamer,thumbnail,state,automatic,category,field_sources,capture_origin) SELECT ?,'twitch',?,?,?,?,?,?,?,CASE WHEN (SELECT review_state FROM candidates WHERE id=?)='rejected' THEN 'discarded' ELSE 'pending' END,1,'',?,'discovery' WHERE ${owned} ON CONFLICT(id) DO NOTHING`,
+          ).bind(
+            c.id,
+            c.id,
+            c.url,
+            new Intl.DateTimeFormat("en-CA", {
+              timeZone: "Europe/Madrid",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            }).format(new Date()),
+            c.created_at,
+            c.title,
+            c.streamer,
+            c.thumbnail || null,
+            c.id,
+            JSON.stringify({
+              title: "Twitch API",
+              streamer: "Twitch API",
+              thumbnail: "Twitch API",
+            }),
+            run.id,
+            Date.now(),
+          ),
+        );
+        writes.push(
+          env.DB.prepare(
+            `INSERT INTO enrichment_jobs(candidate,updated_at) SELECT id,? FROM manual_candidates WHERE id=? AND state!='discarded' AND ${owned} ON CONFLICT(candidate) DO NOTHING`,
+          ).bind(Date.now(), c.id, run.id, Date.now()),
+        );
+      }
       const written = await env.DB.batch([...writes, checkpoint(progress)]);
       if (!written.at(-1)?.meta.changes) fail("lease_expired");
       // Only committed, ownership-fenced pages contribute to saved totals.
