@@ -37,6 +37,11 @@ export function source(value: unknown): {
     if (
       !tracking.has(key) &&
       !(key === "a" && xHosts.includes(u.hostname)) &&
+      // Twitch UI listing filters appended when a clip is opened from a list.
+      !(
+        ["range", "filter", "sort"].includes(key) &&
+        ["clips.twitch.tv", "twitch.tv", "www.twitch.tv"].includes(u.hostname)
+      ) &&
       !(
         key === "v" &&
         ["youtube.com", "www.youtube.com", "m.youtube.com"].includes(
@@ -83,9 +88,10 @@ export function source(value: unknown): {
     url = `https://www.youtube.com/watch?v=${sourceId}`;
   } else if (
     xHosts.includes(u.hostname) &&
-    (m = /^\/([A-Za-z0-9_]{1,15})\/status\/([1-9][0-9]{0,19})\/?$/.exec(
-      u.pathname,
-    ))
+    (m =
+      /^\/([A-Za-z0-9_]{1,15})\/status\/([1-9][0-9]{0,19})(?:\/(?:video|photo)\/[1-4])?\/?$/.exec(
+        u.pathname,
+      ))
   ) {
     provider = "x";
     sourceId = m[2];

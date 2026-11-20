@@ -130,7 +130,7 @@ test("normalization is exact, tracking-safe, provider-namespaced and legacy-comp
     "https://youtube.com/redirect?q=x",
     "https://127.0.0.1/a",
     "https://x.com/a/status/0",
-    "https://x.com/a/status/1/video/1",
+    "https://x.com/a/status/1/video/9",
     "https://x.com:444/a/status/1",
     "https://x.com\\@evil.test/a/status/1",
   ])
