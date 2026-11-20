@@ -232,7 +232,7 @@ test("D1 migration, private drafts, atomic publish, concurrency, snapshot separa
   assert.ok(html.includes("&lt;script&gt;"));
   assert.ok(!html.includes("<script>alert"));
   assert.ok(html.includes(`href="${base}/dia/${e.date}"`));
-  assert.ok(html.includes("DEMOSTRACIÓN"));
+  assert.ok(html.includes("DEMO"));
   assert.ok((await (await request("/sitemap.xml")).text()).includes(e.date));
   r = await request("/admin/save", {
     edition: { ...e, title: "PRIVATE DRAFT CHANGE" },

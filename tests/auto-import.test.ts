@@ -57,7 +57,7 @@ function localRuntime() {
         return new MFResponse(
           JSON.stringify({
             provider_name: "YouTube",
-            title: "El streamer Creador hace una maniobra",
+            title: "The streamer Creador pulls off a maneuver",
             author_name: "Canal original",
           }),
           { headers: { "Content-Type": "application/json" } },
@@ -199,15 +199,15 @@ test("metadata first, local inference fallback and automatic application retain 
       return Response.json({
         message: {
           content: JSON.stringify({
-            title: "Una maniobra del creador",
-            text: "La publicación describe una maniobra del streamer.",
+            title: "A maneuver by the creator",
+            text: "The post describes a maneuver by the streamer.",
             streamer: "Creador",
             category: "Jugadas",
             evidence: {
-              title: "maniobra",
-              text: "maniobra",
-              streamer: "El streamer Creador",
-              category: "maniobra",
+              title: "maneuver",
+              text: "maneuver",
+              streamer: "The streamer Creador",
+              category: "maneuver",
             },
           }),
         },
@@ -226,9 +226,9 @@ test("metadata first, local inference fallback and automatic application retain 
     .prepare("SELECT * FROM manual_candidates WHERE id='youtube:abcdefghijl'")
     .first<any>();
   assert.equal(models, 1);
-  assert.equal(c.title, "El streamer Creador hace una maniobra");
+  assert.equal(c.title, "The streamer Creador pulls off a maneuver");
   assert.equal(c.category, "Jugadas");
-  assert.match(c.text, /La publicación/);
+  assert.match(c.text, /The post/);
   assert.equal(JSON.parse(c.field_sources).text, "enrich (propuesta)");
   assert.equal(c.state, "pending");
   assert.equal(
@@ -273,7 +273,7 @@ test("complete clips skip inference; manual clearing is not refilled automatical
   const e = {
     provider: "twitch",
     postId: "AutoComplete",
-    text: "El streamer Creador hace una maniobra",
+    text: "The streamer Creador pulls off a maneuver",
     author: "",
     handle: "",
     tags: [],
@@ -289,14 +289,14 @@ test("complete clips skip inference; manual clearing is not refilled automatical
     extraction: e,
     suggestion: {
       title: "Título",
-      text: "La publicación describe una maniobra.",
+      text: "The post describes a maneuver.",
       streamer: "Creador",
       category: "Jugadas",
       evidence: {
-        title: "maniobra",
-        text: "maniobra",
+        title: "maneuver",
+        text: "maneuver",
         streamer: "Creador",
-        category: "maniobra",
+        category: "maneuver",
       },
     },
     thumbnail: "",

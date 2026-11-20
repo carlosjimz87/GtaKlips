@@ -18,6 +18,7 @@ export interface ManualCandidate {
   state: string;
   title: string;
   streamer: string;
+  creator: string;
   text: string;
   category: string;
   orientation: string;
@@ -206,6 +207,7 @@ export function candidateWrite(
   for (const [name, max] of [
     ["title", 120],
     ["streamer", 80],
+    ["creator", 80],
     ["text", 400],
   ] as const)
     if (patch[name] !== undefined)
@@ -233,6 +235,7 @@ export function candidateWrite(
   for (const key of [
     "title",
     "streamer",
+    "creator",
     "text",
     "category",
     "orientation",
@@ -241,11 +244,12 @@ export function candidateWrite(
     if (patch[key] !== undefined && (value as any)[key] !== (c as any)[key])
       sources[key] = origin;
   return env.DB.prepare(
-    "UPDATE manual_candidates SET field_sources=?,title=?,streamer=?,text=?,category=?,state=?,orientation=?,thumbnail=?,revision=revision+1 WHERE id=? AND revision=?",
+    "UPDATE manual_candidates SET field_sources=?,title=?,streamer=?,creator=?,text=?,category=?,state=?,orientation=?,thumbnail=?,revision=revision+1 WHERE id=? AND revision=?",
   ).bind(
     JSON.stringify(sources),
     value.title,
     value.streamer,
+    value.creator,
     value.text,
     value.category,
     value.state,

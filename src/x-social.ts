@@ -1,4 +1,4 @@
-import type { Clip, Edition } from "./model";
+import { credit, type Clip, type Edition } from "./model";
 
 /** Weighted X length: every URL counts as 23 chars (t.co), the rest 1 each. */
 export const X_LIMIT = 280;
@@ -36,7 +36,7 @@ const handle = (s: string) => (/^[A-Za-z0-9_]{1,15}$/.test(s) ? `@${s}` : s);
 export function topDraft(e: Edition, clip: Clip, origin: string): XDraft {
   const lines = [
     `🔥 ${clip.title}`,
-    `🎥 ${handle(clip.streamer)}`,
+    `🎥 ${clip.streamer ? handle(clip.streamer) : credit(clip)}`,
     clip.text,
     `▶ ${clip.url}`,
     "#GTAVI",
@@ -45,7 +45,7 @@ export function topDraft(e: Edition, clip: Clip, origin: string): XDraft {
     kind: "top",
     ref: `${e.date}:${clip.id}`,
     text: fit(lines),
-    replyText: `Más momentos del día en GtaKlips 👇\n${origin}/dia/${e.date}?${utm("top", "x_top")}#clip-${clip.id}`,
+    replyText: `More moments of the day on GtaKlips 👇\n${origin}/dia/${e.date}?${utm("top", "x_top")}#clip-${clip.id}`,
   };
 }
 
@@ -55,8 +55,8 @@ export function creatorHuntDraft(
   origin: string,
 ): XDraft {
   const lines = [
-    "🕵️ ¿Quién es el creador de este clip?",
-    "Responde con su @usuario o el enlace de su canal y lo acreditamos en GtaKlips.",
+    "🕵️ Who made this clip?",
+    "Reply with their @handle or channel link and we'll credit them on GtaKlips.",
     `▶ ${c.url}`,
     "#GTAVI",
   ];
@@ -64,7 +64,7 @@ export function creatorHuntDraft(
     kind: "creator_hunt",
     ref: c.id,
     text: fit(lines),
-    replyText: `Cada crédito mejora el archivo: ${origin}/archivo?${utm("quien_es", "x_creator_hunt")}`,
+    replyText: `Every credit improves the archive: ${origin}/archivo?${utm("quien_es", "x_creator_hunt")}`,
   };
 }
 

@@ -82,7 +82,7 @@ test("recorrido móvil: borrador privado, ordenar, destacar, publicar y copiar",
   await expect(page.getByRole("status")).toContainText("Post copiado");
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toContain("5 clips");
-  expect(copied).toContain("DEMOSTRACIÓN");
+  expect(copied).toContain("DEMO");
   const link = copied.split("\n").at(-1)!;
   expect(link).toContain("utm_source=x");
   expect(link).toContain("#clip-DemoJourney4");
@@ -94,7 +94,7 @@ test("recorrido móvil: borrador privado, ordenar, destacar, publicar y copiar",
   await expect(publicPage.locator(":target")).toHaveClass(/featured/);
   await expect(publicPage.locator("article")).toHaveCount(5);
   await expect(
-    publicPage.getByText("DEMOSTRACIÓN · Datos de prueba", { exact: false }),
+    publicPage.getByText("DEMO · Test data", { exact: false }),
   ).toBeVisible();
   await expect(publicPage.locator("article").nth(3)).toHaveAttribute(
     "id",
@@ -125,7 +125,7 @@ test("recorrido móvil: borrador privado, ordenar, destacar, publicar y copiar",
     path: test.info().outputPath("admin-mobile.png"),
     fullPage: true,
   });
-  await publicPage.getByRole("link", { name: "Jugadas", exact: true }).click();
+  await publicPage.getByRole("link", { name: "Plays", exact: true }).click();
   await expect(publicPage.locator("article")).toHaveCount(1);
   await page.getByLabel("Título de la edición").fill("CAMBIO PRIVADO");
   await page.getByRole("button", { name: "Guardar borrador" }).click();
@@ -353,12 +353,10 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
   await page.goto("/dia/" + edition.date);
   await page
     .locator("header")
-    .getByRole("link", { name: "Buscar", exact: true })
+    .getByRole("link", { name: "Search", exact: true })
     .click();
-  await expect(page.getByLabel("Encuentra un clip o un creador")).toBeFocused();
-  await expect(
-    page.getByLabel("Encuentra un clip o un creador"),
-  ).toBeInViewport();
+  await expect(page.getByLabel("Find a clip or a creator")).toBeFocused();
+  await expect(page.getByLabel("Find a clip or a creator")).toBeInViewport();
   await page.goto("/dia/" + edition.date);
   await expect(page.locator(".catalog-card")).toHaveCount(5);
   await expect(page.locator(".billboard h1")).toHaveText(edition.title);
@@ -366,14 +364,14 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
     page.locator(".billboard .featured-credit:visible"),
   ).toContainText("Creador catálogo 2");
   await expect(
-    page.getByRole("link", { name: "Reproducir en Twitch", exact: true }),
+    page.getByRole("link", { name: "Play on Twitch", exact: true }),
   ).toHaveAttribute("href", "https://clips.twitch.tv/CatalogBrowser2");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole("button", { name: "Clips siguientes" }).click();
+  await page.getByRole("button", { name: "Next clips" }).click();
   await expect
     .poll(() => page.locator("#clips-rail").evaluate((el) => el.scrollLeft))
     .toBeGreaterThan(0);
@@ -381,7 +379,7 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
   await page.locator("#clip-CatalogBrowser4").scrollIntoViewIfNeeded();
   await expect(missingPoster).toBeHidden();
   await expect(page.locator("#clip-CatalogBrowser4 .source")).toHaveText(
-    /Ver en Twitch/,
+    /Watch on Twitch/,
   );
   await page.goto(
     "/dia/" + edition.date + "?utm_source=x#clip-CatalogBrowser2",
@@ -392,10 +390,8 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
   );
   await expect(page.locator(":target")).toHaveClass(/featured/);
   await expect(page.locator(":target")).toBeInViewport();
-  await page
-    .getByLabel("Encuentra un clip o un creador")
-    .fill("Creador catálogo 2");
-  await page.getByRole("button", { name: "Buscar", exact: true }).click();
+  await page.getByLabel("Find a clip or a creator").fill("Creador catálogo 2");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator(".catalog-card")).toHaveCount(1);
   await expect(page.locator(".catalog-card")).toHaveAttribute(
     "id",
@@ -430,12 +426,10 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
     await expect(
       page
         .locator("header")
-        .getByRole("link", { name: "Archivo", exact: true }),
+        .getByRole("link", { name: "Archive", exact: true }),
     ).toBeVisible();
     await expect(
-      page
-        .locator("footer")
-        .getByRole("link", { name: "Ediciones anteriores" }),
+      page.locator("footer").getByRole("link", { name: "Previous editions" }),
     ).toHaveAttribute("href", "/archivo");
     await page.screenshot({
       path: test.info().outputPath(`editorial-${width}.png`),
@@ -444,15 +438,15 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
   }
   await page
     .locator("footer")
-    .getByRole("link", { name: "Ediciones anteriores" })
+    .getByRole("link", { name: "Previous editions" })
     .click();
   await expect(page).toHaveURL(/\/archivo$/);
-  await expect(page.locator("h1")).toHaveText("El archivo.");
+  await expect(page.locator("h1")).toHaveText("The archive.");
   await page
     .locator("header")
-    .getByRole("link", { name: "Buscar", exact: true })
+    .getByRole("link", { name: "Search", exact: true })
     .click();
-  await expect(page.getByLabel("Encuentra un clip o un creador")).toBeFocused();
+  await expect(page.getByLabel("Find a clip or a creator")).toBeFocused();
   const desktop = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
     deviceScaleFactor: 1,
@@ -472,7 +466,7 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
     await view.goto("/dia/" + edition.date);
     await view.keyboard.press("Tab");
     await expect(
-      view.getByRole("link", { name: "Saltar al contenido" }),
+      view.getByRole("link", { name: "Skip to content" }),
     ).toBeFocused();
     await view.keyboard.press("Enter");
     await expect(view.locator("main")).toBeFocused();
@@ -490,7 +484,7 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
     ).toBe(true);
     const popup = desktop.waitForEvent("page");
     await view
-      .getByRole("link", { name: "Reproducir en Twitch", exact: true })
+      .getByRole("link", { name: "Play on Twitch", exact: true })
       .click();
     const source = await popup;
     await source.waitForLoadState();

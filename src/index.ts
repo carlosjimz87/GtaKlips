@@ -47,7 +47,7 @@ function page(
   title: string,
   content: string,
   canonical: string,
-  description = "Una selección editorial de clips de GTA VI, con contexto en español y crédito a sus creadores.",
+  description = "An editorial selection of GTA VI clips, with English context and credit to their creators.",
   privatePage = false,
   route = new URL(canonical).pathname,
 ): Response {
@@ -58,13 +58,13 @@ function page(
     hasSearch || (archive && content.includes('<ul class="archive"><li>'));
   const search = hasSearch ? "#buscar" : "/#buscar";
   const header = privatePage
-    ? `<header><a href="/" class="brand">${brandMark}<b>Gta<span>Klips</span></b></a><nav aria-label="Principal"><a href="/">La selección</a><a href="/archivo">Archivo</a></nav></header>`
-    : `<a class="skip-link" href="#contenido">Saltar al contenido</a><header><div class="masthead"><a href="/" class="brand" aria-label="GtaKlips · Inicio">${brandMark}<b>Gta<span>Klips</span></b></a><span class="brand-caption">EL DIRECTO.<br>LOS BUENOS MOMENTOS.</span></div><nav aria-label="Principal"><a class="nav-selection" href="/#seleccion" ${selection ? 'aria-current="page"' : ""}>Selección</a><a href="/archivo" ${archive ? 'aria-current="page"' : ""}>Archivo</a>${canSearch ? `<a class="nav-search" href="${search}">Buscar</a>` : ""}</nav></header>`;
+    ? `<header><a href="/" class="brand">${brandMark}<b>Gta<span>Klips</span></b></a><nav aria-label="Main"><a href="/">The selection</a><a href="/archivo">Archive</a></nav></header>`
+    : `<a class="skip-link" href="#contenido">Skip to content</a><header><div class="masthead"><a href="/" class="brand" aria-label="GtaKlips · Home">${brandMark}<b>Gta<span>Klips</span></b></a><span class="brand-caption">THE STREAM.<br>THE GOOD MOMENTS.</span></div><nav aria-label="Main"><a class="nav-selection" href="/#seleccion" ${selection ? 'aria-current="page"' : ""}>Selection</a><a href="/archivo" ${archive ? 'aria-current="page"' : ""}>Archive</a>${canSearch ? `<a class="nav-search" href="${search}">Search</a>` : ""}</nav></header>`;
   const footer = privatePage
-    ? "<footer>GtaKlips · Curación independiente en español. Sin afiliación con Rockstar Games ni Twitch.</footer>"
-    : `<footer class="editorial-footer"><div class="footer-main"><div><a href="/" class="brand">${brandMark}<b>Gta<span>Klips</span></b></a><p class="footer-statement">El directo pasa.<br>El momento se queda.</p><p class="footer-caption">Una selección con contexto y crédito a quienes la hacen posible.</p></div><nav aria-label="Más momentos"><p class="eyebrow">SIGUE EXPLORANDO</p><a href="/#seleccion">La selección actual</a><a href="/archivo">Ediciones anteriores</a></nav><div class="footer-credit"><p class="eyebrow">DE SUS CREADORES A TU PANTALLA</p><p>Cada clip conserva su autor y el acceso a la fuente original.</p><a class="button secondary" href="/archivo">Explorar archivo</a></div></div><div class="footer-bottom"><span>GtaKlips · Curación independiente en español.</span><p>Sin afiliación con Rockstar Games ni Twitch. Los vídeos y publicaciones se muestran mediante sus proveedores oficiales o en sus webs; no alojamos copias. Los proveedores pueden aplicar sus cookies y controles de contenido.</p></div></footer>`;
+    ? "<footer>GtaKlips · Independent curation in English. Not affiliated with Rockstar Games or Twitch.</footer>"
+    : `<footer class="editorial-footer"><div class="footer-main"><div><a href="/" class="brand">${brandMark}<b>Gta<span>Klips</span></b></a><p class="footer-statement">The stream passes.<br>The moment stays.</p><p class="footer-caption">A selection with context and credit to the people who make it possible.</p></div><nav aria-label="More moments"><p class="eyebrow">KEEP EXPLORING</p><a href="/#seleccion">Current selection</a><a href="/archivo">Previous editions</a></nav><div class="footer-credit"><p class="eyebrow">FROM THEIR CREATORS TO YOUR SCREEN</p><p>Every clip keeps its author and a link to the original source.</p><a class="button secondary" href="/archivo">Explore archive</a></div></div><div class="footer-bottom"><span>GtaKlips · Independent curation in English.</span><p>Not affiliated with Rockstar Games or Twitch. Videos and posts are shown through their official providers or on their own sites; we host no copies. Providers may apply their own cookies and content controls.</p></div></footer>`;
   return new Response(
-    `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · GtaKlips</title><meta name="description" content="${esc(description)}"><meta name="robots" content="${privatePage ? "noindex, nofollow" : "index, follow"}"><link rel="canonical" href="${esc(canonical)}"><meta property="og:type" content="website"><meta property="og:locale" content="es_ES"><meta property="og:site_name" content="GtaKlips"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${esc(canonical)}"><meta name="twitter:card" content="summary_large_image">${brandHead(new URL(canonical).origin)}<link rel="stylesheet" href="/style.css"></head><body class="${privatePage ? "admin-page" : "public-page"}">${header}<main id="contenido" tabindex="-1">${content}</main>${privatePage ? "" : '<script src="/catalog.js" defer></script>'}${footer}</body></html>`,
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · GtaKlips</title><meta name="description" content="${esc(description)}"><meta name="robots" content="${privatePage ? "noindex, nofollow" : "index, follow"}"><link rel="canonical" href="${esc(canonical)}"><meta property="og:type" content="website"><meta property="og:locale" content="en_US"><meta property="og:site_name" content="GtaKlips"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${esc(canonical)}"><meta name="twitter:card" content="summary_large_image">${brandHead(new URL(canonical).origin)}<link rel="stylesheet" href="/style.css"></head><body class="${privatePage ? "admin-page" : "public-page"}">${header}<main id="contenido" tabindex="-1">${content}</main>${privatePage ? "" : '<script src="/catalog.js" defer></script>'}${footer}</body></html>`,
     {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
@@ -268,7 +268,8 @@ async function route(
       const clip = {
         ...source(candidate.url),
         title: candidate.title || "Título pendiente",
-        streamer: candidate.streamer || "Crédito pendiente",
+        streamer: candidate.streamer || "",
+        creator: candidate.creator || "",
         text: candidate.text || "Contexto pendiente de revisión",
         category: candidate.category,
         orientation: candidate.orientation as
@@ -440,8 +441,8 @@ async function route(
         { headers: { "Content-Type": "application/xml" } },
       );
     return page(
-      "Archivo",
-      `<section class="hero"><p class="eyebrow">Buenas historias, sin caducidad</p><h1>El archivo.</h1><p class="lead">Cada selección en su fecha. Vuelve a un momento que merecía la pena.</p></section><ul class="archive">${rows.results.map((r) => `<li><time class="meta">${r.date}</time><br><a href="/dia/${r.date}">${esc(JSON.parse(r.published!).title)}</a></li>`).join("")}</ul>${!rows.results.length ? "<p>La primera edición está en camino.</p>" : ""}`,
+      "Archive",
+      `<section class="hero"><p class="eyebrow">Good stories, no expiry date</p><h1>The archive.</h1><p class="lead">Every selection on its date. Go back to a moment worth revisiting.</p></section><ul class="archive">${rows.results.map((r) => `<li><time class="meta">${r.date}</time><br><a href="/dia/${r.date}">${esc(JSON.parse(r.published!).title)}</a></li>`).join("")}</ul>${!rows.results.length ? "<p>The first edition is on its way.</p>" : ""}`,
       base + path,
     );
   }
@@ -471,10 +472,9 @@ async function route(
         path,
       );
     }
-    if (path === "/")
-      return page("El próximo gran momento", emptyView, base + "/");
+    if (path === "/") return page("The next big moment", emptyView, base + "/");
   }
-  return new Response("Edición no encontrada", { status: 404 });
+  return new Response("Edition not found", { status: 404 });
 }
 export async function handle(
   request: Request,

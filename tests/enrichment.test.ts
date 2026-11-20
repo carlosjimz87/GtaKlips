@@ -22,7 +22,7 @@ import {
   publicResource,
   posterURL,
   inferLocal,
-  spanishOutput,
+  englishOutput,
   createEnrichmentRunner,
 } from "../src/enrichment-runner";
 const base = "http://127.0.0.1:8796",
@@ -30,7 +30,7 @@ const base = "http://127.0.0.1:8796",
 let runtime: Miniflare, dir: string;
 const e: Extraction = {
   postId: "701",
-  text: "El streamer Creador hace una maniobra. #GTA",
+  text: "The streamer Creador pulls off a maneuver. #GTA",
   author: "Repostero",
   handle: "@repostero",
   tags: ["#GTA"],
@@ -43,15 +43,15 @@ const e: Extraction = {
   imageType: "unavailable",
 };
 const s = {
-  title: "Una maniobra del creador",
-  text: "La publicación describe una maniobra del streamer.",
+  title: "A maneuver by the creator",
+  text: "The post describes a maneuver by the streamer.",
   streamer: "Creador",
   category: "Jugadas",
   evidence: {
-    title: "maniobra",
-    text: "maniobra",
-    streamer: "El streamer Creador",
-    category: "maniobra",
+    title: "maneuver",
+    text: "maneuver",
+    streamer: "The streamer Creador",
+    category: "maneuver",
   },
 };
 const p = () =>
@@ -214,7 +214,7 @@ test("automatic proposal and explicit correction fill missing fields with revisi
     (await db
       .prepare("SELECT title FROM manual_candidates WHERE id='x:701'")
       .first<any>())!.title,
-    "Una maniobra del creador",
+    "A maneuver by the creator",
   );
   await admin("edit", {
     id: "x:701",
@@ -514,7 +514,7 @@ test("structured local inference uses fixed loopback, no tools, bounded schema a
   };
   assert.equal((await inferLocal(e, "fixture-model", request)).title, s.title);
   assert.equal(calls, 2);
-  assert.equal(spanishOutput("Accidents inattendus avec des joueurs"), false);
+  assert.equal(englishOutput("Accidents inattendus avec des joueurs"), false);
   await assert.rejects(
     inferLocal(e, "fixture-model", async () =>
       Response.json({ message: { content: '{"title":"wrong"}' } }),
@@ -746,8 +746,8 @@ test("quote typography maps to the original evidence and Spanish pronouns/proper
     src,
   );
   assert.equal(out.evidence.text, "n’importe");
-  assert.equal(spanishOutput("La publicación les atribuye una maniobra"), true);
-  assert.equal(spanishOutput("Un detalle de The Last of Us"), true);
+  assert.equal(englishOutput("The post credits them with a maneuver"), true);
+  assert.equal(englishOutput("A detail from The Last of Us"), true);
 });
 
 test("video-only posts retain their image and dimensions without any model request or invented editorial fields", async () => {

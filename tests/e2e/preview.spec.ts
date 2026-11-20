@@ -107,7 +107,7 @@ test("destacado automático, hover diferido, un solo reproductor y salida segura
       path: test.info().outputPath("preview-desktop.png"),
       fullPage: true,
     });
-    await page.getByRole("button", { name: "Detener vista previa" }).click();
+    await page.getByRole("button", { name: "Stop preview" }).click();
     await expect(page.locator("iframe")).toHaveCount(0);
     const card = page.locator("#clip-PreviewClip0");
     await card.scrollIntoViewIfNeeded();
@@ -138,17 +138,13 @@ test("destacado automático, hover diferido, un solo reproductor y salida segura
     // Crossing the next card briefly must not open a delayed replacement.
     await page.waitForTimeout(600);
     await expect(page.locator("iframe")).toHaveCount(0);
-    await card
-      .getByRole("button", { name: "Vista previa", exact: true })
-      .focus();
+    await card.getByRole("button", { name: "Preview", exact: true }).focus();
     await page.keyboard.press("Enter");
     await assertFrame(ctx, "#clip-PreviewClip0");
     await page.keyboard.press("Escape");
     await expect(page.locator("iframe")).toHaveCount(0);
     await page.mouse.move(5, 5);
-    await card
-      .getByRole("button", { name: "Vista previa", exact: true })
-      .click();
+    await card.getByRole("button", { name: "Preview", exact: true }).click();
     await assertFrame(ctx, "#clip-PreviewClip0");
     await page.locator(".card-preview-layer .layer-footer a").focus();
     await page.keyboard.press("Tab");
@@ -286,7 +282,7 @@ test("móvil estrecho conserva la fuente y móvil amplio requiere toque; fallo c
     await page.waitForTimeout(750);
     await expect(page.locator("iframe")).toHaveCount(0);
     await expect(
-      page.getByRole("link", { name: "Reproducir en Twitch", exact: true }),
+      page.getByRole("link", { name: "Play on Twitch", exact: true }),
     ).toBeVisible();
     expect(
       await page.evaluate(
@@ -325,9 +321,9 @@ test("móvil estrecho conserva la fuente y móvil amplio requiere toque; fallo c
         )
         .getByText("Reproductor simulado de Twitch"),
     ).toBeVisible();
-    await expect(toggle).toHaveText("Detener vista previa");
+    await expect(toggle).toHaveText("Stop preview");
     const close = page.getByRole("button", {
-      name: "Cerrar vista previa",
+      name: "Close preview",
       exact: true,
     });
     await expect(close).toBeFocused();
@@ -346,7 +342,7 @@ test("móvil estrecho conserva la fuente y móvil amplio requiere toque; fallo c
     );
     await page.locator(".hero-preview [data-preview-toggle]").tap();
     await expect(page.locator(".hero-preview .preview-status")).toContainText(
-      /original en Twitch/,
+      /original on Twitch/,
     );
     await expect(page.locator(".hero-preview .preview-source")).toHaveAttribute(
       "href",
