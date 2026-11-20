@@ -177,7 +177,7 @@ async function main() {
       stopping = true;
     });
   const enrichment =
-    process.env.ENRICHMENT_MODEL && process.env.ENRICHMENT_ENABLED !== "0"
+    process.env.ENRICHMENT_ENABLED !== "0"
       ? import("./enrichment-runner")
           .then(({ enrichmentConfig, enrichmentLoop }) =>
             enrichmentLoop(enrichmentConfig(process.env), () => stopping),

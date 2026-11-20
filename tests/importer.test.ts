@@ -268,6 +268,10 @@ before(async () => {
       " ",
     ),
   );
+  for (const name of ["0005_x_enrichment.sql", "0006_auto_import.sql"])
+    await db.exec(
+      (await readFile("migrations/" + name, "utf8")).replace(/\n/g, " "),
+    );
 });
 after(async () => {
   await mf?.dispose();
@@ -596,6 +600,8 @@ test("missing config skips network; configured category is verified by ID, never
         "0002_twitch.sql",
         "0003_candidate_thumbnails.sql",
         "0004_manual_inbox.sql",
+        "0005_x_enrichment.sql",
+        "0006_auto_import.sql",
       ])
         await database.exec(
           (await readFile("migrations/" + name, "utf8")).replace(/\n/g, " "),
@@ -805,6 +811,10 @@ test("manual-first Twitch capture is not duplicated or revived by later imports"
     .prepare("SELECT * FROM candidates WHERE id='ImportDemo'")
     .first<any>();
   await db.prepare("DELETE FROM candidates WHERE id='ImportDemo'").run();
+  await db
+    .prepare("DELETE FROM enrichment_jobs WHERE candidate='ImportDemo'")
+    .run();
+  await db.prepare("DELETE FROM manual_candidates WHERE id='ImportDemo'").run();
   await db
     .prepare(
       "INSERT INTO manual_candidates(id,provider,source_id,url,captured_date,created_at,state,title,text) VALUES('ImportDemo','twitch','ImportDemo','https://clips.twitch.tv/ImportDemo','2039-06-01','2039-06-01T00:00:00Z','discarded','Editorial manual','Contexto conservado')",

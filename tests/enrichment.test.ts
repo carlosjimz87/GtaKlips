@@ -201,7 +201,7 @@ test("single global lease, restart recovery, stale completion fencing and bounde
     .prepare("UPDATE enrichment_jobs SET status='failed',token=NULL")
     .run();
 });
-test("explicit retry and apply fill missing fields with revision guard, preserve state and manual values; no publication", async () => {
+test("automatic proposal and explicit correction fill missing fields with revision guard, preserve state and manual values; no publication", async () => {
   await admin("analyze", { id: "x:701" });
   const job = ((await (await internal("claim")).json()) as any).job;
   assert.equal(job.candidate, "x:701");
@@ -214,11 +214,11 @@ test("explicit retry and apply fill missing fields with revision guard, preserve
     (await db
       .prepare("SELECT title FROM manual_candidates WHERE id='x:701'")
       .first<any>())!.title,
-    "",
+    "Una maniobra del creador",
   );
   await admin("edit", {
     id: "x:701",
-    revision: 1,
+    revision: 2,
     title: "Título manual",
     category: "Reacciones",
   });
@@ -227,7 +227,7 @@ test("explicit retry and apply fill missing fields with revision guard, preserve
     400,
   );
   assert.equal(
-    (await admin("apply-enrichment", { id: "x:701", revision: 2 })).status,
+    (await admin("apply-enrichment", { id: "x:701", revision: 3 })).status,
     200,
   );
   const c = await db
@@ -267,7 +267,7 @@ test("partial model failure remains a reviewable extraction and permits manual e
   assert.equal(status.job.status, "partial");
   assert.equal(status.proposal.suggestion, null);
   assert.equal(
-    (await admin("edit", { id: "x:702", revision: 1, title: "Edición manual" }))
+    (await admin("edit", { id: "x:702", revision: 2, title: "Edición manual" }))
       .status,
     200,
   );
@@ -579,15 +579,40 @@ test("bot proposal and explicit application use owner-only fresh revision callba
       },
     },
   });
-  const getButton = async (action: string) =>
-    (
-      await db
-        .prepare(
-          "SELECT token FROM telegram_buttons WHERE candidate=? AND action=? ORDER BY rowid DESC LIMIT 1",
-        )
-        .bind("x:703", action)
-        .first<any>()
-    ).token;
+  // Seed a legacy callback to verify already-delivered controls remain safe after migration.
+  const getButton = async (action: string) => {
+    const existing = await db
+      .prepare(
+        "SELECT token FROM telegram_buttons WHERE candidate=? AND action=? ORDER BY rowid DESC LIMIT 1",
+      )
+      .bind("x:703", action)
+      .first<any>();
+    if (existing) return existing.token;
+    const c = await db
+      .prepare("SELECT revision FROM manual_candidates WHERE id='x:703'")
+      .first<any>();
+    const date = (
+      await db.prepare("SELECT date FROM telegram_receiver").first<any>()
+    ).date;
+    const selection = await db
+      .prepare("SELECT revision FROM manual_selections WHERE date=?")
+      .bind(date)
+      .first<any>();
+    const token = crypto.randomUUID();
+    await db
+      .prepare("INSERT INTO telegram_buttons VALUES(?,?,?,?,?,?,?)")
+      .bind(
+        token,
+        "x:703",
+        action,
+        date,
+        selection?.revision || 0,
+        c.revision,
+        Date.now() + 60000,
+      )
+      .run();
+    return token;
+  };
   const callback = async (update_id: number, token: string) =>
     post("/internal/telegram/update", {
       owner,
@@ -643,7 +668,7 @@ test("bot proposal and explicit application use owner-only fresh revision callba
   const applied = await db
     .prepare("SELECT * FROM manual_candidates WHERE id='x:703'")
     .first<any>();
-  assert.equal(applied.revision, revision + 1);
+  assert.equal(applied.revision, revision);
   assert.equal(applied.streamer, "Creador");
   assert.equal(applied.category, "Jugadas");
   assert.equal(applied.state, "pending");
@@ -655,7 +680,7 @@ test("bot proposal and explicit application use owner-only fresh revision callba
         .prepare("SELECT revision FROM manual_candidates WHERE id='x:703'")
         .first<any>()
     ).revision,
-    revision + 1,
+    revision,
   );
   await callback(7, await getButton("analyze"));
   assert.equal(
@@ -789,10 +814,22 @@ test("an old invalid proposal cannot prevent the owner bot from capturing links 
     },
   });
   assert.equal(response.status, 200);
+  await post("/internal/telegram/update", {
+    owner,
+    update: {
+      update_id: 101,
+      message: {
+        chat: { id: 101, type: "private" },
+        from: { id: 102 },
+        text: "/seleccion",
+      },
+    },
+  });
   assert.ok(
     await db
-      .prepare("SELECT token FROM telegram_buttons WHERE candidate=?")
-      .bind("x:709")
+      .prepare(
+        "SELECT token FROM auto_buttons WHERE action='edit' AND instr(payload,'x:709')>0",
+      )
       .first(),
   );
   assert.ok(

@@ -23,6 +23,8 @@ export interface ManualCandidate {
   orientation: string;
   thumbnail: string | null;
   revision: number;
+  automatic?: number;
+  field_sources?: string;
 }
 export interface Selection {
   date: string;
@@ -80,7 +82,13 @@ export function selectionGuard(env: Env, previous: Selection) {
 }
 export const clearGuard = (env: Env) =>
   env.DB.prepare("DELETE FROM manual_write_guard");
-export async function capturePlan(env: Env, urls: string[], date: string) {
+export async function capturePlan(
+  env: Env,
+  urls: string[],
+  date: string,
+  notify = false,
+  overflow = 0,
+) {
   if (!dateValid(date) || urls.length > 10)
     throw Error("Fecha o cantidad de URLs no válida");
   const statements: D1PreparedStatement[] = [],
@@ -88,6 +96,9 @@ export async function capturePlan(env: Env, urls: string[], date: string) {
   let duplicate = 0,
     rejected = 0;
   const seen = new Set<string>();
+  const members = new Set<string>();
+  const added: string[] = [];
+  const batchId = crypto.randomUUID();
   for (const raw of urls) {
     let link;
     try {
@@ -96,9 +107,11 @@ export async function capturePlan(env: Env, urls: string[], date: string) {
       rejected++;
       continue;
     }
+    members.add(link.id);
     const existing = await getCandidate(env, link.id);
     if (seen.has(link.id) || existing) {
       duplicate++;
+      if (existing && existing.state !== "discarded") added.push(link.id);
       continue;
     }
     seen.add(link.id);
@@ -113,7 +126,7 @@ export async function capturePlan(env: Env, urls: string[], date: string) {
     else saved.push(link.id);
     statements.push(
       env.DB.prepare(
-        "INSERT INTO manual_candidates(id,provider,source_id,url,captured_date,created_at,title,streamer,thumbnail,state) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING",
+        "INSERT INTO manual_candidates(id,provider,source_id,url,captured_date,created_at,title,streamer,thumbnail,state,automatic,category,field_sources) VALUES(?,?,?,?,?,?,?,?,?,?,1,'',?) ON CONFLICT(id) DO NOTHING",
       ).bind(
         link.id,
         link.provider,
@@ -125,13 +138,70 @@ export async function capturePlan(env: Env, urls: string[], date: string) {
         imported?.streamer || "",
         imported?.thumbnail || null,
         imported?.review_state === "rejected" ? "discarded" : "pending",
+        JSON.stringify(
+          imported
+            ? {
+                title: "Twitch API",
+                streamer: "Twitch API",
+                thumbnail: "Twitch API",
+              }
+            : {},
+        ),
       ),
     );
-    if (link.provider === "x") statements.push(queueEnrichment(env, link.id));
+    statements.push(queueEnrichment(env, link.id));
+    if (imported?.review_state !== "rejected") added.push(link.id);
   }
-  return { statements, saved, duplicate, rejected };
+  const selection = await getSelection(env, date);
+  const ids: string[] = JSON.parse(selection.ids);
+  const excess = added
+    .filter((id) => !ids.includes(id))
+    .slice(Math.max(0, 10 - ids.length));
+  for (const id of added)
+    if (!ids.includes(id) && ids.length < 10) ids.push(id);
+  if (ids.length && JSON.stringify(ids) !== selection.ids)
+    statements.push(
+      selectionGuard(env, selection),
+      selectionWrite(env, selection, ids, true),
+      clearGuard(env),
+    );
+  statements.push(
+    env.DB.prepare(
+      "INSERT INTO capture_batches(id,date,created_at,notify,saved,duplicates,rejected,overflow) VALUES(?,?,?,?,?,?,?,?)",
+    ).bind(
+      batchId,
+      date,
+      Date.now(),
+      Number(notify),
+      saved.length,
+      duplicate,
+      rejected,
+      overflow + excess.length,
+    ),
+  );
+  for (const id of members)
+    statements.push(
+      env.DB.prepare("INSERT INTO capture_members VALUES(?,?)").bind(
+        batchId,
+        id,
+      ),
+    );
+  return {
+    statements,
+    saved,
+    duplicate,
+    rejected,
+    batchId,
+    members: [...members],
+    excess,
+  };
 }
-export function candidateWrite(env: Env, c: ManualCandidate, patch: any) {
+export function candidateWrite(
+  env: Env,
+  c: ManualCandidate,
+  patch: any,
+  origin = "manual",
+) {
   const value = { ...c };
   for (const [name, max] of [
     ["title", 120],
@@ -141,7 +211,7 @@ export function candidateWrite(env: Env, c: ManualCandidate, patch: any) {
     if (patch[name] !== undefined)
       value[name] = patch[name] === "" ? "" : str(patch[name], max);
   if (patch.category !== undefined) {
-    if (!categories.includes(patch.category))
+    if (patch.category !== "" && !categories.includes(patch.category))
       throw Error("Categoría no válida");
     value.category = patch.category;
   }
@@ -159,9 +229,21 @@ export function candidateWrite(env: Env, c: ManualCandidate, patch: any) {
   }
   if (patch.thumbnail !== undefined)
     value.thumbnail = thumbnail(patch.thumbnail) || null;
+  const sources = JSON.parse(c.field_sources || "{}");
+  for (const key of [
+    "title",
+    "streamer",
+    "text",
+    "category",
+    "orientation",
+    "thumbnail",
+  ])
+    if (patch[key] !== undefined && (value as any)[key] !== (c as any)[key])
+      sources[key] = origin;
   return env.DB.prepare(
-    "UPDATE manual_candidates SET title=?,streamer=?,text=?,category=?,state=?,orientation=?,thumbnail=?,revision=revision+1 WHERE id=? AND revision=?",
+    "UPDATE manual_candidates SET field_sources=?,title=?,streamer=?,text=?,category=?,state=?,orientation=?,thumbnail=?,revision=revision+1 WHERE id=? AND revision=?",
   ).bind(
+    JSON.stringify(sources),
     value.title,
     value.streamer,
     value.text,
@@ -252,7 +334,8 @@ export async function inboxAction(env: Env, action: string, v: any) {
   }
   if (action === "analyze") {
     const c = await getCandidate(env, String(v.id));
-    if (!c || c.provider !== "x") throw Error("Clip no encontrado");
+    if (!c || c.state === "discarded")
+      throw Error("Recupera el clip descartado en admin antes de analizarlo");
     await retryEnrichment(env, c.id);
     return { ok: true };
   }
@@ -296,7 +379,12 @@ export async function inboxAction(env: Env, action: string, v: any) {
               candidateWrite(env, c, patch),
             ])
           )[2]
-        : await candidateWrite(env, c, patch).run();
+        : await candidateWrite(
+            env,
+            c,
+            patch,
+            action === "metadata" ? c.provider + " metadata" : "manual",
+          ).run();
     if (!result.meta.changes) throw Error("Revisión cambió. Recarga.");
     return { ok: true, enriched: Object.keys(patch).length > 0 };
   }

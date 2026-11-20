@@ -1,3 +1,4 @@
+import { autoUpdate, notifyBatches, outboxWrites } from "./auto-bot";
 import {
   proposalGuard,
   enrichmentStatus,
@@ -30,7 +31,7 @@ const reply = (v: unknown, status = 200) =>
   Response.json(v, { status, headers: { "Cache-Control": "no-store" } });
 const leaseMs = 90000;
 const help =
-  "/ayuda · /estado · /edicion YYYY-MM-DD · /seleccion · /preparar · /cancelar\nEnvía hasta 10 enlaces directos Twitch, YouTube o X (también texto reenviado y pies de foto). No se importan archivos ni ediciones de mensajes. Seleccionar y preparar no guarda ni publica una edición. Revisa y publica en el editor web del ordenador; localhost no es accesible desde el móvil.";
+  "Envía hasta 10 enlaces Twitch, YouTube o X. Se guardan y procesan automáticamente en un borrador privado. /seleccion para editar, /estado para el avance, /publicar para revisar la edición y confirmar su publicación, /edicion YYYY-MM-DD para cambiar fecha y /cancelar para cancelar una entrada. La edición completa está en admin del ordenador. Nada se publica al enviar enlaces.";
 async function processUpdate(
   env: BridgeEnv,
   update: any,
@@ -111,7 +112,16 @@ async function processUpdate(
     chat: env.TELEGRAM_OWNER_CHAT_ID || "",
     user: env.TELEGRAM_OWNER_USER_ID || "",
   });
-  if (authorized) {
+  const automatic = authorized ? await autoUpdate(env, update, date) : null;
+  if (automatic) {
+    writes.push(...automatic.writes);
+    if (update.message?.text?.trim() === "/cancelar") {
+      pending = pendingField = null;
+      pendingRevision = null;
+    }
+    text = automatic.text;
+    keyboard.push(...automatic.keyboard);
+  } else if (authorized) {
     const message = update.message;
     const command =
       typeof message?.text === "string" ? message.text.trim() : "";
@@ -237,7 +247,17 @@ async function processUpdate(
         }
         const changedSelection = JSON.stringify(ids) !== originalIds;
         const changedCandidate = Object.keys(patch).length > 0;
-        if (changedCandidate) writes.push(candidateWrite(env, c, patch));
+        if (changedCandidate)
+          writes.push(
+            candidateWrite(
+              env,
+              c,
+              patch,
+              button.action === "metadata"
+                ? c.provider + " metadata"
+                : "manual",
+            ),
+          );
         // The guard fences the read snapshot even when only the candidate changed.
         writes.push(selectionGuard(env, selection));
         if (changedSelection) writes.push(selectionWrite(env, selection, ids));
@@ -293,6 +313,7 @@ async function processUpdate(
         text = "Usa /edicion YYYY-MM-DD con una fecha válida.";
       else {
         date = value;
+        writes.push(env.DB.prepare("DELETE FROM auto_input"));
         pending = pendingField = null;
         pendingRevision = null;
         text = `Fecha editorial: ${date} (Madrid).`;
@@ -397,21 +418,7 @@ async function processUpdate(
     clearGuard(env),
     env.DB.prepare("INSERT INTO telegram_updates VALUES(?,?)").bind(id, now),
     ...writes,
-    ...(text
-      ? [
-          env.DB.prepare(
-            "INSERT INTO telegram_outbox(update_id,payload) VALUES(?,?)",
-          ).bind(
-            id,
-            JSON.stringify({
-              text: text.slice(0, 4000),
-              ...(keyboard.length
-                ? { reply_markup: { inline_keyboard: keyboard } }
-                : {}),
-            }),
-          ),
-        ]
-      : []),
+    ...(text ? outboxWrites(env, id, { text, keyboard, writes: [] }) : []),
     env.DB.prepare(
       "UPDATE telegram_receiver SET cursor=?,date=?,pending_candidate=?,pending_field=?,pending_revision=? WHERE singleton=1",
     ).bind(id + 1, date, pending, pendingField, pendingRevision),
@@ -419,6 +426,7 @@ async function processUpdate(
       "DELETE FROM enrichment_buttons WHERE token NOT IN (SELECT token FROM telegram_buttons WHERE expires_at>=?)",
     ).bind(now),
     env.DB.prepare("DELETE FROM telegram_buttons WHERE expires_at<?").bind(now),
+    env.DB.prepare("DELETE FROM auto_buttons WHERE expires_at<=?").bind(now),
   ]);
   return { ok: true };
 }
@@ -478,6 +486,9 @@ export async function bridge(
         running: healthReceiver.expires_at > now,
         pending,
         failed,
+        processing: await env.DB.prepare(
+          "SELECT last_seen,model_configured FROM processing_health WHERE singleton=1",
+        ).first(),
       });
     }
     if (action === "lease") {
@@ -506,38 +517,49 @@ export async function bridge(
     }
     if (action === "update")
       return reply(await processUpdate(env, v.update, receiver, v.owner));
-    if (action === "outbox")
+    if (action === "outbox") {
+      await notifyBatches(env);
       return reply(
         (
           await env.DB.prepare(
-            "SELECT id,payload,attempts FROM telegram_outbox WHERE delivered=0 AND next_at<=? ORDER BY id LIMIT 10",
+            "SELECT id,payload,attempts FROM telegram_outbox o WHERE delivered=0 AND next_at<=? AND NOT EXISTS(SELECT 1 FROM telegram_outbox prior WHERE prior.update_id=o.update_id AND prior.part<o.part AND prior.delivered!=1) ORDER BY id LIMIT 10",
           )
             .bind(now)
             .all()
         ).results,
       );
+    }
     if (action === "ack") {
       if (!Number.isSafeInteger(v.id) || typeof v.ok !== "boolean")
         return reply({}, 400);
       const row = await env.DB.prepare(
-        "SELECT attempts FROM telegram_outbox WHERE id=? AND delivered=0",
+        "SELECT attempts,update_id,part FROM telegram_outbox WHERE id=? AND delivered=0",
       )
         .bind(v.id)
         .first<any>();
-      if (row)
-        await env.DB.prepare(
+      if (row) {
+        const ack = env.DB.prepare(
           "UPDATE telegram_outbox SET delivered=?,attempts=attempts+1,next_at=? WHERE id=?",
-        )
-          .bind(
-            v.ok ? 1 : row.attempts >= 7 ? -1 : 0,
-            now +
-              retryDelay(
-                row.attempts,
-                Number.isFinite(v.retryAfter) ? v.retryAfter : 0,
-              ),
-            v.id,
-          )
-          .run();
+        ).bind(
+          v.ok ? 1 : row.attempts >= 7 ? -1 : 0,
+          now +
+            retryDelay(
+              row.attempts,
+              Number.isFinite(v.retryAfter) ? v.retryAfter : 0,
+            ),
+          v.id,
+        );
+        await env.DB.batch([
+          ack,
+          ...(!v.ok && row.attempts >= 7
+            ? [
+                env.DB.prepare(
+                  "UPDATE telegram_outbox SET delivered=-1 WHERE update_id=? AND part>? AND delivered=0",
+                ).bind(row.update_id, row.part),
+              ]
+            : []),
+        ]);
+      }
       return reply({ ok: true });
     }
     return reply({}, 404);

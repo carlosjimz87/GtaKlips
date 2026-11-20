@@ -1,3 +1,4 @@
+import { editionWrite } from "./edition-store";
 import { enrichmentAsset, enrichmentStatus } from "./enrichment";
 import { source } from "./source";
 import {
@@ -11,9 +12,10 @@ import { editionView, emptyView, catalogScript } from "./catalog";
 import { importTwitch, type Candidate } from "./importer";
 import { importPage, importScript } from "./import-admin";
 import { authorized, type Env } from "./auth";
-import { dateValid, esc, post, validate, type Edition } from "./model";
+import { dateValid, esc, post, type Edition } from "./model";
 import { css } from "./style";
 import { xDrafts, xPublish } from "./x-admin";
+import { brandHead, brandMark, brandResponse } from "./brand";
 import { adminScript, editor } from "./admin";
 interface Row {
   date: string;
@@ -56,13 +58,13 @@ function page(
     hasSearch || (archive && content.includes('<ul class="archive"><li>'));
   const search = hasSearch ? "#buscar" : "/#buscar";
   const header = privatePage
-    ? '<header><a href="/" class="brand">Gta<span>Klips</span></a><nav aria-label="Principal"><a href="/">La selección</a><a href="/archivo">Archivo</a></nav></header>'
-    : `<a class="skip-link" href="#contenido">Saltar al contenido</a><header><div class="masthead"><a href="/" class="brand" aria-label="GtaKlips · Inicio">Gta<span>Klips</span></a><span class="brand-caption">EL DIRECTO.<br>LOS BUENOS MOMENTOS.</span></div><nav aria-label="Principal"><a class="nav-selection" href="/#seleccion" ${selection ? 'aria-current="page"' : ""}>Selección</a><a href="/archivo" ${archive ? 'aria-current="page"' : ""}>Archivo</a>${canSearch ? `<a class="nav-search" href="${search}">Buscar</a>` : ""}</nav></header>`;
+    ? `<header><a href="/" class="brand">${brandMark}<b>Gta<span>Klips</span></b></a><nav aria-label="Principal"><a href="/">La selección</a><a href="/archivo">Archivo</a></nav></header>`
+    : `<a class="skip-link" href="#contenido">Saltar al contenido</a><header><div class="masthead"><a href="/" class="brand" aria-label="GtaKlips · Inicio">${brandMark}<b>Gta<span>Klips</span></b></a><span class="brand-caption">EL DIRECTO.<br>LOS BUENOS MOMENTOS.</span></div><nav aria-label="Principal"><a class="nav-selection" href="/#seleccion" ${selection ? 'aria-current="page"' : ""}>Selección</a><a href="/archivo" ${archive ? 'aria-current="page"' : ""}>Archivo</a>${canSearch ? `<a class="nav-search" href="${search}">Buscar</a>` : ""}</nav></header>`;
   const footer = privatePage
     ? "<footer>GtaKlips · Curación independiente en español. Sin afiliación con Rockstar Games ni Twitch.</footer>"
-    : `<footer class="editorial-footer"><div class="footer-main"><div><a href="/" class="brand">Gta<span>Klips</span></a><p class="footer-statement">El directo pasa.<br>El momento se queda.</p><p class="footer-caption">Una selección con contexto y crédito a quienes la hacen posible.</p></div><nav aria-label="Más momentos"><p class="eyebrow">SIGUE EXPLORANDO</p><a href="/#seleccion">La selección actual</a><a href="/archivo">Ediciones anteriores</a></nav><div class="footer-credit"><p class="eyebrow">DE SUS CREADORES A TU PANTALLA</p><p>Cada clip conserva su autor y el acceso a la fuente original.</p><a class="button secondary" href="/archivo">Explorar archivo</a></div></div><div class="footer-bottom"><span>GtaKlips · Curación independiente en español.</span><p>Sin afiliación con Rockstar Games ni Twitch. Los vídeos y publicaciones se muestran mediante sus proveedores oficiales o en sus webs; no alojamos copias. Los proveedores pueden aplicar sus cookies y controles de contenido.</p></div></footer>`;
+    : `<footer class="editorial-footer"><div class="footer-main"><div><a href="/" class="brand">${brandMark}<b>Gta<span>Klips</span></b></a><p class="footer-statement">El directo pasa.<br>El momento se queda.</p><p class="footer-caption">Una selección con contexto y crédito a quienes la hacen posible.</p></div><nav aria-label="Más momentos"><p class="eyebrow">SIGUE EXPLORANDO</p><a href="/#seleccion">La selección actual</a><a href="/archivo">Ediciones anteriores</a></nav><div class="footer-credit"><p class="eyebrow">DE SUS CREADORES A TU PANTALLA</p><p>Cada clip conserva su autor y el acceso a la fuente original.</p><a class="button secondary" href="/archivo">Explorar archivo</a></div></div><div class="footer-bottom"><span>GtaKlips · Curación independiente en español.</span><p>Sin afiliación con Rockstar Games ni Twitch. Los vídeos y publicaciones se muestran mediante sus proveedores oficiales o en sus webs; no alojamos copias. Los proveedores pueden aplicar sus cookies y controles de contenido.</p></div></footer>`;
   return new Response(
-    `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · GtaKlips</title><meta name="description" content="${esc(description)}"><meta name="robots" content="${privatePage ? "noindex, nofollow" : "index, follow"}"><link rel="canonical" href="${esc(canonical)}"><meta property="og:type" content="website"><meta property="og:locale" content="es_ES"><meta property="og:site_name" content="GtaKlips"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${esc(canonical)}"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/style.css"></head><body class="${privatePage ? "admin-page" : "public-page"}">${header}<main id="contenido" tabindex="-1">${content}</main>${privatePage ? "" : '<script src="/catalog.js" defer></script>'}${footer}</body></html>`,
+    `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · GtaKlips</title><meta name="description" content="${esc(description)}"><meta name="robots" content="${privatePage ? "noindex, nofollow" : "index, follow"}"><link rel="canonical" href="${esc(canonical)}"><meta property="og:type" content="website"><meta property="og:locale" content="es_ES"><meta property="og:site_name" content="GtaKlips"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${esc(canonical)}"><meta name="twitter:card" content="summary_large_image">${brandHead(new URL(canonical).origin)}<link rel="stylesheet" href="/style.css"></head><body class="${privatePage ? "admin-page" : "public-page"}">${header}<main id="contenido" tabindex="-1">${content}</main>${privatePage ? "" : '<script src="/catalog.js" defer></script>'}${footer}</body></html>`,
     {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
@@ -187,6 +189,12 @@ async function route(
         )
           .bind(v.state, v.id)
           .run();
+        if (result.meta.changes)
+          await env.DB.prepare(
+            "UPDATE manual_candidates SET state=?,revision=revision+1 WHERE id=? AND capture_origin='discovery'",
+          )
+            .bind(v.state === "rejected" ? "discarded" : "pending", v.id)
+            .run();
         return result.meta.changes
           ? json({ ok: true })
           : json({ error: "Candidato no encontrado" }, 404);
@@ -194,35 +202,12 @@ async function route(
       if (!Number.isSafeInteger(v.revision) || v.revision < 0)
         throw Error("Revisión no válida");
       if (path === "/admin/save" || path === "/admin/publish") {
-        const e = validate(v.edition, path.endsWith("publish")),
-          serialized = JSON.stringify(e);
-        let statement: D1PreparedStatement;
-        if (v.revision === 0) {
-          statement = env.DB.prepare(
-            "INSERT INTO editions(date,draft,published,published_at) VALUES(?,?,?,?) ON CONFLICT(date) DO NOTHING RETURNING revision",
-          ).bind(
-            e.date,
-            serialized,
-            path.endsWith("publish") ? serialized : null,
-            path.endsWith("publish") ? new Date().toISOString() : null,
-          );
-        } else {
-          statement = env.DB.prepare(
-            path.endsWith("publish")
-              ? "UPDATE editions SET draft=?, published=?, published_at=?, revision=revision+1 WHERE date=? AND revision=? RETURNING revision"
-              : "UPDATE editions SET draft=?, revision=revision+1 WHERE date=? AND revision=? RETURNING revision",
-          ).bind(
-            ...(path.endsWith("publish")
-              ? [
-                  serialized,
-                  serialized,
-                  new Date().toISOString(),
-                  e.date,
-                  v.revision,
-                ]
-              : [serialized, e.date, v.revision]),
-          );
-        }
+        const statement = editionWrite(
+          env,
+          v.edition,
+          v.revision,
+          path.endsWith("publish"),
+        );
         // A complete ordered snapshot is committed in one D1 transaction.
         const [write] = await env.DB.batch<{ revision: number }>([statement]);
         const result = write.results[0];
@@ -433,6 +418,10 @@ async function route(
     return new Response(catalogScript, {
       headers: { "Content-Type": "text/javascript; charset=utf-8" },
     });
+  if (path.startsWith("/brand/")) {
+    const asset = brandResponse(path);
+    if (asset) return asset;
+  }
   if (path === "/style.css")
     return new Response(css, {
       headers: { "Content-Type": "text/css; charset=utf-8" },
