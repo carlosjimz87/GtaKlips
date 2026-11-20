@@ -1,3 +1,4 @@
+import { assetID } from "./enrichment-contract";
 import { source } from "./source";
 export const categories = [
   "Fails",
@@ -8,7 +9,7 @@ export const categories = [
 export interface Clip {
   provider?: "twitch" | "youtube" | "x";
   sourceId?: string;
-  orientation?: "auto" | "landscape" | "portrait";
+  orientation?: "auto" | "landscape" | "portrait" | "square";
   thumbnail?: string;
   duration?: number;
   id: string;
@@ -63,6 +64,7 @@ export function twitch(v: unknown): { id: string; url: string } {
 }
 export function thumbnail(value: unknown): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value === "string" && assetID(value)) return value;
   const u = new URL(str(value, 1500));
   if (
     u.protocol !== "https:" ||
@@ -106,7 +108,7 @@ export function validate(v: any, publish = false): Edition {
     const link = source(c.url);
     if (
       c.orientation !== undefined &&
-      !["auto", "landscape", "portrait"].includes(c.orientation)
+      !["auto", "landscape", "portrait", "square"].includes(c.orientation)
     )
       throw Error("URL: orientación no válida");
     const image = thumbnail(c.thumbnail);

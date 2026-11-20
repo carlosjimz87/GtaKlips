@@ -1,3 +1,10 @@
+import {
+  proposalGuard,
+  enrichmentStatus,
+  missingPatch,
+  queueEnrichment,
+  retryEnrichment,
+} from "./enrichment";
 import type { Env } from "./auth";
 import { categories, dateValid, str, thumbnail } from "./model";
 import { source } from "./source";
@@ -120,6 +127,7 @@ export async function capturePlan(env: Env, urls: string[], date: string) {
         imported?.review_state === "rejected" ? "discarded" : "pending",
       ),
     );
+    if (link.provider === "x") statements.push(queueEnrichment(env, link.id));
   }
   return { statements, saved, duplicate, rejected };
 }
@@ -143,7 +151,9 @@ export function candidateWrite(env: Env, c: ManualCandidate, patch: any) {
     value.state = patch.state;
   }
   if (patch.orientation !== undefined) {
-    if (!["auto", "portrait", "landscape"].includes(patch.orientation))
+    if (
+      !["auto", "portrait", "landscape", "square"].includes(patch.orientation)
+    )
       throw Error("URL: orientación no válida");
     value.orientation = patch.orientation;
   }
@@ -240,16 +250,53 @@ export async function inboxAction(env: Env, action: string, v: any) {
       rejected: result.rejected,
     };
   }
-  if (action === "edit" || action === "metadata") {
+  if (action === "analyze") {
+    const c = await getCandidate(env, String(v.id));
+    if (!c || c.provider !== "x") throw Error("Clip no encontrado");
+    await retryEnrichment(env, c.id);
+    return { ok: true };
+  }
+  if (
+    action === "edit" ||
+    action === "metadata" ||
+    action === "apply-enrichment"
+  ) {
     const c = await getCandidate(env, String(v.id));
     if (!c || c.revision !== v.revision)
       throw Error("Revisión cambió. Recarga.");
-    const patch = action === "edit" ? v : await metadata(c);
+    const resultProposalStatus =
+      action === "apply-enrichment" ? await enrichmentStatus(env, c.id) : null;
+    if (
+      action === "apply-enrichment" &&
+      (!resultProposalStatus?.proposal ||
+        resultProposalStatus.created_at !== v.proposalRevision)
+    )
+      throw Error("Revisión de propuesta cambió. Recarga.");
+    const resultProposal = resultProposalStatus?.proposal;
+    const patch =
+      action === "edit"
+        ? v
+        : action === "apply-enrichment"
+          ? resultProposal
+            ? missingPatch(c, resultProposal)
+            : {}
+          : await metadata(c);
     // Optional metadata only fills blanks; editorial work always wins.
     if (action === "metadata")
       for (const key of ["title", "streamer", "thumbnail"] as const)
         if (c[key]) delete patch[key];
-    const result = await candidateWrite(env, c, patch).run();
+    if (action === "apply-enrichment" && !Object.keys(patch).length)
+      return { ok: true, enriched: false };
+    const result =
+      action === "apply-enrichment"
+        ? (
+            await env.DB.batch([
+              proposalGuard(env, c.id, v.proposalRevision),
+              clearGuard(env),
+              candidateWrite(env, c, patch),
+            ])
+          )[2]
+        : await candidateWrite(env, c, patch).run();
     if (!result.meta.changes) throw Error("Revisión cambió. Recarga.");
     return { ok: true, enriched: Object.keys(patch).length > 0 };
   }

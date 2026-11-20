@@ -192,3 +192,13 @@ Referencias del plan original. Revisar sus condiciones vigentes al implementar c
 - [Cloudflare D1](https://developers.cloudflare.com/d1/)
 - [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)
 - [Política de AdSense sobre contenido replicado](https://support.google.com/publisherpolicies/answer/11190248)
+
+## Continuación del paso 1: propuestas automáticas de X
+
+La captura manual de X en bandeja y Telegram añade un trabajo privado, sin esperar al navegador ni al modelo. La continuación utiliza únicamente el embed oficial y contenido público accesible, sin API de pago, inicio de sesión o descarga de vídeos. Las respuestas públicas son oportunistas (por defecto hasta diez, configurable 0..50) y se muestra siempre cuántas se han leído realmente y por qué pueden faltar.
+
+El servicio local Node requiere Chromium de Playwright y Ollama en loopback con un modelo ya instalado cuyo nombre se configura fuera de Git. Se integra como bucle independiente en el bot y también puede ejecutarse con `npm run enrich`. La producción no incorpora navegador ni inferencia; la D1 usada por el servicio es la del servidor local configurado. El trabajo usa un lease global con fencing, recuperación de reinicios y reintentos acotados.
+
+Se generan propuestas separadas de los campos editoriales: streamer sólo con evidencia explícita, título y contexto atribuido en español, categoría, orientación medida e imagen inicial o póster oficial claramente etiquetado. El autor del post no equivale al streamer. Los resultados parciales y los desconocidos se muestran honestamente. Las imágenes JPEG acotadas se guardan en D1, tienen revisión privada y sólo son públicas mientras las referencia una edición publicada.
+
+La acción explícita **Aplicar campos vacíos** en la bandeja o el bot verifica la revisión editorial y la versión de la propuesta. Conserva valores manuales y el estado de revisión. Preparar, aplicar y reanalizar nunca publican ni aprueban una edición. La revisión y publicación existentes siguen siendo obligatorias. La comprobación del proveedor/modelo real es independiente de las pruebas deterministas con bases efímeras y proveedores simulados.

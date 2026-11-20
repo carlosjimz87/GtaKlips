@@ -176,6 +176,18 @@ async function main() {
     process.on(signal, () => {
       stopping = true;
     });
+  const enrichment =
+    process.env.ENRICHMENT_MODEL && process.env.ENRICHMENT_ENABLED !== "0"
+      ? import("./enrichment-runner")
+          .then(({ enrichmentConfig, enrichmentLoop }) =>
+            enrichmentLoop(enrichmentConfig(process.env), () => stopping),
+          )
+          .catch(() => {
+            console.error(
+              "Local enrichment unavailable; receiver and manual editing remain available.",
+            );
+          })
+      : Promise.resolve();
   console.log("Local owner-only receiver started. Stop with Ctrl-C.");
   try {
     while (!stopping) {
@@ -196,6 +208,8 @@ async function main() {
       }
     }
   } finally {
+    stopping = true;
+    await enrichment;
     await runner.internal("release").catch(() => {});
   }
 }

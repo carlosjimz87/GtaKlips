@@ -189,3 +189,37 @@ Las pruebas automáticas separan D1/Telegram simulado y adaptadores oficiales si
 ### Rollback
 
 Detén el runner antes de volver al código anterior. Conserva una copia privada de D1 local; las tablas aditivas pueden permanecer. No elimines las tablas Twitch ni las ediciones. Las ediciones antiguas Twitch son compatibles; un código anterior a multifuente no entiende nuevas ediciones YouTube/X, por lo que no debe servirlas sin restaurar un snapshot compatible revisado. No se realiza despliegue ni rollback remoto automáticamente.
+
+## Análisis local de publicaciones de X
+
+Al capturar una fuente X por la bandeja o el bot, se guarda primero la fuente y un trabajo privado. El navegador y el modelo funcionan en un proceso Node separado del Worker; nunca bloquean la captura ni el polling del bot. Las capturas duplicadas no repiten análisis. Para fuentes antiguas o fallos, usa **Analizar / reintentar**. Los controles manuales siguen disponibles aunque no haya modelo.
+
+Aplica las migraciones locales con `npm run db:local` antes de iniciar el servicio. Instala el navegador de Playwright si no está disponible (`npx playwright install chromium`). No cambian dependencias ni se requiere ninguna API de pago. Ollama debe estar disponible en el bucle local fijo `http://127.0.0.1:11434`; instala un modelo adecuado por tus propios medios y elige su nombre en el entorno privado. No se envían datos a un proveedor de IA remoto.
+
+Configura en el archivo local ignorado `.env.telegram` (también usado por `npm run bot`):
+
+```dotenv
+# Nombre del modelo ya instalado en tu Ollama local. Sin valor público predeterminado.
+ENRICHMENT_MODEL=nombre-del-modelo-local
+# Número máximo de respuestas públicas que se intentan recoger (0..50, defecto 10).
+ENRICHMENT_COMMENTS=10
+# 0 desactiva el análisis integrado en el bot; cualquier otro valor lo habilita.
+ENRICHMENT_ENABLED=1
+# Reutiliza el secreto privado y el origen del bridge local ya configurados.
+# LOCAL_BRIDGE_SECRET=...
+# LOCAL_BRIDGE_ORIGIN=http://127.0.0.1:8787
+```
+
+`npm run bot` inicia un bucle de análisis independiente si hay `ENRICHMENT_MODEL` y no está desactivado. Sin bot, ejecuta `npm run enrich` junto al servidor de desarrollo local; utiliza el mismo archivo privado y no requiere credenciales de Telegram. `ENRICHMENT_ENABLED=0` sólo controla el arranque integrado: el comando explícito `enrich` ejecuta el servicio. No ejecutes ambos por necesidad: el lease global impide trabajo simultáneo, pero un único proceso es suficiente. El Worker de producción excluye Playwright, Ollama y los bridges locales. Esta versión analiza con la D1 del servidor local; no incorpora un túnel ni un puente remoto de producción.
+
+El recolector utiliza un contexto efímero sin cookies guardadas y el embed oficial de X. Verifica el identificador del artículo mediante su enlace temporal y separa el autor del post del streamer original. Intenta la conversación pública sin iniciar sesión; no sortea bloqueos, CAPTCHA ni pantallas de acceso. **0/10 comentarios significa cero comentarios leídos**, aunque el proveedor anuncie más respuestas. Sólo se consideran respuestas con pertenencia visible a la conversación; las sugerencias y los comentarios no verifican hechos ni autoría. Hay límites de tiempo, desplazamientos, texto y red. La inferencia recibe como máximo 6000 caracteres de comentarios (hasta 500 por comentario), además del texto acotado del post; no se promete cobertura exhaustiva.
+
+La orientación procede de dimensiones intrínsecas del vídeo, o de su área de reproducción medida y etiquetada; admite horizontal, vertical, cuadrada y desconocida. Se intenta una imagen JPEG del elemento de vídeo con un fotograma decodificado en tiempo cercano a cero. Si no está disponible, se puede guardar el póster oficial etiquetado **provider_poster**, que no garantiza ser el fotograma inicial. Nunca se guarda un vídeo completo: las solicitudes de vídeo se rechazan salvo respuestas parciales acotadas, con un máximo de cuatro manifiestos HLS de 8 KiB y dos bloques iniciales de medios de 512 KiB. La imagen final está limitada a 300 KiB; puede no estar disponible.
+
+El modelo usa JSON estructurado, temperatura cero, sin herramientas, entrada/salida y tiempos acotados, con un máximo de dos intentos ante salida inválida. El título y el contexto deben estar en español; un control heurístico rechaza señales comunes de francés/inglés, pero la revisión editorial sigue siendo necesaria. El streamer queda vacío si el post no lo identifica explícitamente; la cuenta que comparte el vídeo no se convierte automáticamente en su creador. Si falla el modelo, se conserva una extracción parcial visible y se puede reintentar. Si el post no aporta texto, no se consulta al modelo: se conservan los medios disponibles y se indica el motivo, sin inventar título ni contexto.
+
+La bandeja muestra estado, autor del post, recuento real de comentarios y motivo, dimensiones, procedencia de imagen, datos originales y evidencia de las sugerencias. El polling no recarga ni reemplaza formularios en edición. **Aplicar campos vacíos** es una acción explícita del propietario: verifica la revisión editorial y la versión exacta de la propuesta mostrada y conserva los campos no vacíos, el trabajo manual y el estado de revisión. La categoría inicial `Fails` sólo se completa si la fuente continúa intacta en su primera revisión. Reintentar y generar una propuesta no modifican campos editoriales ni ediciones. En el bot, **Propuesta / metadatos**, **Analizar** y **Aplicar vacíos** ofrecen el mismo flujo privado con botones nuevos tras cada acción. No se envían avisos automáticos de análisis ni publicaciones a terceros.
+
+Las propuestas y JPEG se guardan en tablas nuevas de D1 (migración `0005`). Las imágenes se identifican por hash y se revisan por una ruta protegida de administración. Su ruta pública sólo entrega bytes cuando una edición publicada referencia exactamente la imagen; un borrador no basta. Retirar la última referencia publicada revoca inmediatamente el acceso público (sin caché). No se publica texto, comentarios ni evidencia del análisis en rutas públicas. La publicación sigue requiriendo la revisión y acción editorial existentes.
+
+Los trabajos usan un token de fencing, lease de tres minutos y un único análisis simultáneo. Un reinicio recupera los trabajos caducados; hay como máximo tres intentos automáticos, con espera tras error. Un proceso viejo no puede guardar resultados tras perder el lease. Un resultado parcial del modelo requiere reintento explícito para volver a inferir. Las pruebas usan D1 efímera, respuestas de modelo simuladas, HTML público de prueba y ninguna llamada real a X, Ollama o Telegram; la comprobación real del proveedor/modelo se realiza por separado.

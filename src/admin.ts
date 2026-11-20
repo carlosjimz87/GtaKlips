@@ -29,7 +29,7 @@ function add(c = {}) {
     field("Streamer · crédito", "streamer", c.streamer),
     field("Título del clip", "title", c.title),
     field("Contexto editorial en español", "text", c.text, "textarea"),
-    field("Miniatura de Twitch / YouTube / X (opcional)", "thumbnail", c.thumbnail, "url"),
+    field("Miniatura de Twitch / YouTube / X (opcional)", "thumbnail", c.thumbnail, "text"),
   );
   const l = document.createElement("label");
   l.textContent = "Categoría";
@@ -44,7 +44,7 @@ function add(c = {}) {
   box.append(l);
   const orientation = document.createElement("label"); orientation.textContent = "Orientación";
   const orientationInput = document.createElement("select"); orientationInput.name = "orientation";
-  for (const value of ["auto", "landscape", "portrait"]) orientationInput.add(new Option(value,value));
+  for (const value of ["auto", "landscape", "portrait", "square"]) orientationInput.add(new Option(value,value));
   orientationInput.value = c.orientation || "auto"; orientation.append(orientationInput); box.append(orientation);
   const featured = document.createElement("label");
   const radio = document.createElement("input");

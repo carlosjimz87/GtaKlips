@@ -1,3 +1,4 @@
+import { enrichmentAsset, enrichmentStatus } from "./enrichment";
 import { source } from "./source";
 import {
   inboxAction,
@@ -262,6 +263,12 @@ async function route(
     }
     if (request.method !== "GET")
       return json({ error: "Método no permitido" }, 405);
+    if (/^\/admin\/enrichment-assets\/[a-f0-9]{64}\.jpg$/.test(path))
+      return enrichmentAsset(env, path.split("/").at(-1)!.slice(0, -4), true);
+    if (path === "/admin/inbox/enrichment")
+      return json(
+        await enrichmentStatus(env, url.searchParams.get("id") || ""),
+      );
     if (path === "/admin/inbox/preview") {
       const candidate = await getCandidate(
         env,
@@ -274,8 +281,16 @@ async function route(
         streamer: candidate.streamer || "Crédito pendiente",
         text: candidate.text || "Contexto pendiente de revisión",
         category: candidate.category,
-        orientation: candidate.orientation as "auto" | "portrait" | "landscape",
-        ...(candidate.thumbnail ? { thumbnail: candidate.thumbnail } : {}),
+        orientation: candidate.orientation as
+          "auto" | "portrait" | "landscape" | "square",
+        ...(candidate.thumbnail
+          ? {
+              thumbnail: candidate.thumbnail.replace(
+                "/media/enrichment/",
+                "/admin/enrichment-assets/",
+              ),
+            }
+          : {}),
       };
       return page(
         "Revisión privada",
@@ -407,6 +422,8 @@ async function route(
   }
   if (request.method !== "GET" && request.method !== "HEAD")
     return json({ error: "Método no permitido" }, 405);
+  if (/^\/media\/enrichment\/[a-f0-9]{64}\.jpg$/.test(path))
+    return enrichmentAsset(env, path.split("/").at(-1)!.slice(0, -4));
   if (path === "/catalog.js")
     return new Response(catalogScript, {
       headers: { "Content-Type": "text/javascript; charset=utf-8" },
