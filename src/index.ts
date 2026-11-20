@@ -14,6 +14,7 @@ import { importPage, importScript } from "./import-admin";
 import { authorized, type Env } from "./auth";
 import { dateValid, esc, post, type Edition } from "./model";
 import { css } from "./style";
+import { xDrafts, xPublish } from "./x-admin";
 import { brandHead, brandMark, brandResponse } from "./brand";
 import { adminScript, editor } from "./admin";
 interface Row {
@@ -123,6 +124,8 @@ async function route(
         return json(
           await inboxAction(env, path.slice("/admin/inbox/".length), v),
         );
+      if (path === "/admin/x/publish")
+        return json(await xPublish(env, v, base));
       if (path === "/admin/selection/load") {
         const selection = await getSelection(env, v.date);
         const row = await env.DB.prepare("SELECT * FROM editions WHERE date=?")
@@ -250,6 +253,8 @@ async function route(
       return json({ error: "Método no permitido" }, 405);
     if (/^\/admin\/enrichment-assets\/[a-f0-9]{64}\.jpg$/.test(path))
       return enrichmentAsset(env, path.split("/").at(-1)!.slice(0, -4), true);
+    if (path === "/admin/x/drafts")
+      return json(await xDrafts(env, url.searchParams.get("date") || "", base));
     if (path === "/admin/inbox/enrichment")
       return json(
         await enrichmentStatus(env, url.searchParams.get("id") || ""),

@@ -8,6 +8,8 @@ export interface Env {
   ACCESS_ISSUER?: string;
   ACCESS_AUDIENCE?: string;
   LOCAL_DEVELOPMENT?: string;
+  X_ACCESS_TOKEN?: string;
+  X_PUBLISH_ENABLED?: string;
 }
 export const loopback = (host: string) =>
   ["127.0.0.1", "localhost", "[::1]"].includes(host);
