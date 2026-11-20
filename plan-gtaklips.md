@@ -5,18 +5,29 @@
 **Piloto** · 14 días desde la primera edición pública, con $0 en anuncios.
 **Primer hito** · Publicar una edición de cinco clips desde el panel, generar su post para X y verificar que el enlace abre el clip destacado.
 
+## Próximos pasos · orden actualizado
+
+1. **Telegram manual multifuente.** Captura privada local de Twitch, YouTube y X, revisión y selección por fecha, preparación y carga confirmada al editor; reproducción oficial y publicación web explícita. Verificar primero con proveedores/Telegram simulados y después con el bot dedicado real, sin depender de nuevas credenciales Twitch.
+2. **Integración Twitch real.** Configurar la aplicación, verificar categoría y ejecutar la importación existente contra el proveedor.
+3. **Medición.** Implementar y validar eventos y atribución sin confundir aperturas con reproducciones.
+4. **Despliegue y bot siempre activo.** Elegir alojamiento, proteger accesos y definir operación continua; el runner actual es local y no despliega nada.
+5. **Primera edición pública real.** Revisar derechos, contexto y disponibilidad, publicar explícitamente y comprobar en móvil.
+6. **Piloto de catorce días.** Medir operación y resultados, revisar los días 7 y 14.
+
+Las entregas históricas y sus criterios se conservan más abajo. El nuevo orden no acredita comprobaciones reales pendientes ni autoriza publicaciones automáticas.
+
 ## 1. Producto y alcance del MVP
 
 GtaKlips ayuda a descubrir en unos minutos qué merece la pena ver de GTA VI cada día. La web ofrece entre cinco y diez clips cuando haya suficientes candidatos verificados. Cada ficha incluye una explicación breve en español, crédito al streamer y enlace a la fuente. Las categorías iniciales son **Fails**, **Jugadas**, **Detalles** y **Reacciones**.
 
 El operador puede gestionar el producto sin jugar a GTA VI. Su trabajo consiste en mirar los clips finalistas, elegir los que funcionan, comprobar el contexto y descartar spoilers o duplicados. Twitch es la primera fuente automática y X es el primer canal de captación.
 
-| Incluido en el MVP | Se evalúa después del piloto |
-|---|---|
-| Portada, ediciones por fecha y filtros | Guías o comparativas con afiliación |
-| Alta manual de clips y panel privado | Otra fuente de clips |
-| Importación programada de Twitch | Publicación mediante la API de X |
-| Borradores para X y enlaces atribuidos | Campaña pagada con presupuesto aprobado |
+| Incluido en el MVP                      | Se evalúa después del piloto            |
+| --------------------------------------- | --------------------------------------- |
+| Portada, ediciones por fecha y filtros  | Guías o comparativas con afiliación     |
+| Alta manual multifuente y panel privado | Nuevas fuentes automáticas              |
+| Importación programada de Twitch        | Publicación mediante la API de X        |
+| Borradores para X y enlaces atribuidos  | Campaña pagada con presupuesto aprobado |
 
 La revisión editorial y la publicación en X son manuales durante el piloto. La automatización prepara los candidatos, conserva los datos y genera el borrador de distribución.
 
@@ -53,25 +64,25 @@ Para comunidades, usar `utm_medium=referral` y un identificador conocido de orig
 
 Un proyecto en **TypeScript**, con **Cloudflare Workers** para servir HTML y ejecutar las tareas programadas, **D1** como base de datos y **Cron Triggers** para importar candidatos. Proteger el panel y sus acciones mediante **Cloudflare Access**. Las páginas públicas son accesibles sin cuenta.
 
-| Ruta | Función |
-|---|---|
-| `/` | Última edición publicada o mensaje de estreno si todavía no existe. |
-| `/dia/AAAA-MM-DD` | Edición permanente con filtros, destacado, créditos y enlaces. |
-| `/archivo` | Ediciones publicadas desde la más reciente. |
-| `/admin` | Cola de revisión, editor, importaciones y métricas. |
-| `/admin/*` | Acciones protegidas para importar, guardar, publicar y retirar clips. |
-| `/eventos` | Recepción de eventos públicos permitidos y agregación diaria. |
-| `/sitemap.xml` | Portada, archivo y ediciones publicadas. |
+| Ruta              | Función                                                               |
+| ----------------- | --------------------------------------------------------------------- |
+| `/`               | Última edición publicada o mensaje de estreno si todavía no existe.   |
+| `/dia/AAAA-MM-DD` | Edición permanente con filtros, destacado, créditos y enlaces.        |
+| `/archivo`        | Ediciones publicadas desde la más reciente.                           |
+| `/admin`          | Cola de revisión, editor, importaciones y métricas.                   |
+| `/admin/*`        | Acciones protegidas para importar, guardar, publicar y retirar clips. |
+| `/eventos`        | Recepción de eventos públicos permitidos y agregación diaria.         |
+| `/sitemap.xml`    | Portada, archivo y ediciones publicadas.                              |
 
 ### Datos mínimos
 
-| Entidad | Campos principales |
-|---|---|
-| Clip | ID de Twitch, URL, streamer, título de origen, idioma, fecha, duración, vistas observadas, fecha de consulta y estado. |
-| Edición | Fecha editorial de Madrid, título, entradilla, estado y hora de publicación. |
-| Clip de edición | Edición, clip, posición, categoría, texto editorial y destacado. |
-| Importación | Hora, resultado, candidatos encontrados y error resumido. |
-| Métrica agregada | Fecha, edición, origen, acción y contador. |
+| Entidad          | Campos principales                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Clip             | ID de Twitch, URL, streamer, título de origen, idioma, fecha, duración, vistas observadas, fecha de consulta y estado. |
+| Edición          | Fecha editorial de Madrid, título, entradilla, estado y hora de publicación.                                           |
+| Clip de edición  | Edición, clip, posición, categoría, texto editorial y destacado.                                                       |
+| Importación      | Hora, resultado, candidatos encontrados y error resumido.                                                              |
+| Métrica agregada | Fecha, edición, origen, acción y contador.                                                                             |
 
 Guardar instantes en UTC y calcular fechas editoriales con `Europe/Madrid`. Guardar secretos de Twitch en el entorno del Worker. Validar y escapar el texto externo antes de mostrarlo. Admitir enlaces HTTPS de formatos reconocidos de Twitch sin cargar direcciones arbitrarias desde el servidor.
 
@@ -124,11 +135,11 @@ La primera entrega puede ofrecer **Ver en Twitch**. Los reproductores oficiales 
 
 ## 6. Piloto de 14 días
 
-| Periodo | Trabajo | Decisión |
-|---|---|---|
-| Días 1–3 | Publicar una edición diaria, comprobar enlaces y vista previa en X, compartir un aporte en una comunidad afín. | Corregir diferencias entre lo prometido en X y lo mostrado en la página. |
-| Días 4–7 | Alternar humor, detalles y reacciones. Registrar tiempo editorial y aperturas por edición. | Repetir los formatos que envían visitas y generan aperturas. |
-| Días 8–14 | Mantener la cadencia, repetir dos ganchos eficaces con clips nuevos y comparar fuentes. | Ampliar distribución, mejorar la página o reducir esfuerzo si apenas hay uso. |
+| Periodo   | Trabajo                                                                                                        | Decisión                                                                      |
+| --------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Días 1–3  | Publicar una edición diaria, comprobar enlaces y vista previa en X, compartir un aporte en una comunidad afín. | Corregir diferencias entre lo prometido en X y lo mostrado en la página.      |
+| Días 4–7  | Alternar humor, detalles y reacciones. Registrar tiempo editorial y aperturas por edición.                     | Repetir los formatos que envían visitas y generan aperturas.                  |
+| Días 8–14 | Mantener la cadencia, repetir dos ganchos eficaces con clips nuevos y comparar fuentes.                        | Ampliar distribución, mejorar la página o reducir esfuerzo si apenas hay uso. |
 
 ### Scoreboard
 

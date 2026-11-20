@@ -1,3 +1,11 @@
+import { source } from "./source";
+import {
+  inboxAction,
+  getSelection,
+  selectionClips,
+  getCandidate,
+} from "./inbox";
+import { inboxPage, inboxScript } from "./inbox-admin";
 import { editionView, emptyView, catalogScript } from "./catalog";
 import { importTwitch, type Candidate } from "./importer";
 import { importPage, importScript } from "./import-admin";
@@ -50,10 +58,18 @@ function page(
     : `<a class="skip-link" href="#contenido">Saltar al contenido</a><header><div class="masthead"><a href="/" class="brand" aria-label="GtaKlips · Inicio">Gta<span>Klips</span></a><span class="brand-caption">EL DIRECTO.<br>LOS BUENOS MOMENTOS.</span></div><nav aria-label="Principal"><a class="nav-selection" href="/#seleccion" ${selection ? 'aria-current="page"' : ""}>Selección</a><a href="/archivo" ${archive ? 'aria-current="page"' : ""}>Archivo</a>${canSearch ? `<a class="nav-search" href="${search}">Buscar</a>` : ""}</nav></header>`;
   const footer = privatePage
     ? "<footer>GtaKlips · Curación independiente en español. Sin afiliación con Rockstar Games ni Twitch.</footer>"
-    : `<footer class="editorial-footer"><div class="footer-main"><div><a href="/" class="brand">Gta<span>Klips</span></a><p class="footer-statement">El directo pasa.<br>El momento se queda.</p><p class="footer-caption">Una selección con contexto y crédito a quienes la hacen posible.</p></div><nav aria-label="Más momentos"><p class="eyebrow">SIGUE EXPLORANDO</p><a href="/#seleccion">La selección actual</a><a href="/archivo">Ediciones anteriores</a></nav><div class="footer-credit"><p class="eyebrow">DE SUS CREADORES A TU PANTALLA</p><p>Cada clip conserva su autor y el acceso a la fuente original en Twitch.</p><a class="button secondary" href="/archivo">Explorar archivo</a></div></div><div class="footer-bottom"><span>GtaKlips · Curación independiente en español.</span><p>Sin afiliación con Rockstar Games ni Twitch. Los vídeos se reproducen mediante Twitch o en su web; no alojamos copias. Twitch puede aplicar sus cookies y controles de contenido.</p></div></footer>`;
+    : `<footer class="editorial-footer"><div class="footer-main"><div><a href="/" class="brand">Gta<span>Klips</span></a><p class="footer-statement">El directo pasa.<br>El momento se queda.</p><p class="footer-caption">Una selección con contexto y crédito a quienes la hacen posible.</p></div><nav aria-label="Más momentos"><p class="eyebrow">SIGUE EXPLORANDO</p><a href="/#seleccion">La selección actual</a><a href="/archivo">Ediciones anteriores</a></nav><div class="footer-credit"><p class="eyebrow">DE SUS CREADORES A TU PANTALLA</p><p>Cada clip conserva su autor y el acceso a la fuente original.</p><a class="button secondary" href="/archivo">Explorar archivo</a></div></div><div class="footer-bottom"><span>GtaKlips · Curación independiente en español.</span><p>Sin afiliación con Rockstar Games ni Twitch. Los vídeos y publicaciones se muestran mediante sus proveedores oficiales o en sus webs; no alojamos copias. Los proveedores pueden aplicar sus cookies y controles de contenido.</p></div></footer>`;
   return new Response(
     `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · GtaKlips</title><meta name="description" content="${esc(description)}"><meta name="robots" content="${privatePage ? "noindex, nofollow" : "index, follow"}"><link rel="canonical" href="${esc(canonical)}"><meta property="og:type" content="website"><meta property="og:locale" content="es_ES"><meta property="og:site_name" content="GtaKlips"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${esc(canonical)}"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/style.css"></head><body class="${privatePage ? "admin-page" : "public-page"}">${header}<main id="contenido" tabindex="-1">${content}</main>${privatePage ? "" : '<script src="/catalog.js" defer></script>'}${footer}</body></html>`,
-    { headers: { "Content-Type": "text/html; charset=utf-8" } },
+    {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "X-Media-Providers": [
+          content.includes('data-provider="youtube"') ? "youtube" : "",
+          content.includes('data-provider="x"') ? "x" : "",
+        ].join(","),
+      },
+    },
   );
 }
 async function body(request: Request): Promise<any> {
@@ -100,6 +116,59 @@ async function route(
       )
         return json({ error: "Origen no permitido" }, 403);
       const v = await body(request);
+      if (path.startsWith("/admin/inbox/"))
+        return json(
+          await inboxAction(env, path.slice("/admin/inbox/".length), v),
+        );
+      if (path === "/admin/selection/load") {
+        const selection = await getSelection(env, v.date);
+        const row = await env.DB.prepare("SELECT * FROM editions WHERE date=?")
+          .bind(v.date)
+          .first<Row>();
+        if (
+          !selection.prepared ||
+          selection.revision !== v.selectionRevision ||
+          (row?.revision || 0) !== v.revision ||
+          (row && v.confirm !== true)
+        )
+          return json(
+            {
+              error:
+                "Revisión cambió o falta confirmar añadir al borrador existente. Recarga.",
+            },
+            409,
+          );
+        const clips = await selectionClips(env, selection);
+        const existing = row ? JSON.parse(row.draft) : null;
+        const combined = [...(existing?.clips || [])];
+        for (const c of clips)
+          if (!combined.some((old: any) => source(old.url).id === c.id))
+            combined.push({ ...c, sourceId: c.source_id });
+        if (combined.length > 10)
+          return json(
+            {
+              error:
+                "Clips: el borrador combinado supera diez fuentes. Ajusta la selección.",
+            },
+            400,
+          );
+        return json({
+          edition: {
+            ...(existing || {
+              date: v.date,
+              title: "",
+              intro: "",
+              hook: "",
+              demo: false,
+              featured: combined[0]?.id,
+            }),
+            clips: combined,
+            reviewed: false,
+          },
+          revision: row?.revision || 0,
+          published: !!row?.published,
+        });
+      }
       if (path === "/admin/import")
         return json(await importTwitch(env, "manual"));
       if (path === "/admin/candidates/review") {
@@ -172,6 +241,7 @@ async function route(
         if (!row?.published)
           return json({ error: "Edición no publicada" }, 404);
         const e: Edition = JSON.parse(row.published);
+        if (v.id.startsWith("https://")) v.id = source(v.id).id;
         if (!e.clips.some((c) => c.id === v.id))
           throw Error("Clip no encontrado");
         e.clips = e.clips.filter((c) => c.id !== v.id);
@@ -192,6 +262,70 @@ async function route(
     }
     if (request.method !== "GET")
       return json({ error: "Método no permitido" }, 405);
+    if (path === "/admin/inbox/preview") {
+      const candidate = await getCandidate(
+        env,
+        url.searchParams.get("id") || "",
+      );
+      if (!candidate) return json({ error: "Clip no encontrado" }, 404);
+      const clip = {
+        ...source(candidate.url),
+        title: candidate.title || "Título pendiente",
+        streamer: candidate.streamer || "Crédito pendiente",
+        text: candidate.text || "Contexto pendiente de revisión",
+        category: candidate.category,
+        orientation: candidate.orientation as "auto" | "portrait" | "landscape",
+        ...(candidate.thumbnail ? { thumbnail: candidate.thumbnail } : {}),
+      };
+      return page(
+        "Revisión privada",
+        '<a href="/admin/inbox">Volver a la bandeja</a><p>Vista privada: revisa disponibilidad, crédito y contexto. No se guarda ni publica.</p>' +
+          editionView(
+            {
+              date: candidate.captured_date,
+              title: "Revisión de fuente",
+              intro: "Fuente privada pendiente de revisión editorial",
+              hook: "",
+              demo: false,
+              reviewed: false,
+              featured: clip.id,
+              clips: [clip],
+            },
+            null,
+          ) +
+          '<script src="/catalog.js" defer></script>',
+        base + path,
+        undefined,
+        true,
+      );
+    }
+    if (path === "/admin/inbox")
+      return page(
+        "Bandeja privada",
+        await inboxPage(env, url),
+        base + path,
+        undefined,
+        true,
+      );
+    if (path === "/admin/inbox.js")
+      return new Response(inboxScript, {
+        headers: { "Content-Type": "text/javascript; charset=utf-8" },
+      });
+    if (path === "/admin/source.js")
+      return new Response(
+        "const normalizeSource = " + source.toString() + ";",
+        { headers: { "Content-Type": "text/javascript; charset=utf-8" } },
+      );
+    if (path === "/admin/selection") {
+      const date = url.searchParams.get("date") || "";
+      const selection = await getSelection(env, date);
+      const row = await env.DB.prepare(
+        "SELECT revision FROM editions WHERE date=?",
+      )
+        .bind(date)
+        .first<Row>();
+      return json({ selection, revision: row?.revision || 0 });
+    }
     if (path === "/admin/imports")
       return page(
         "Importaciones",
@@ -357,6 +491,8 @@ export async function handle(
   headers.set("Cache-Control", "no-store");
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  const media = headers.get("X-Media-Providers") || "";
+  headers.delete("X-Media-Providers");
   headers.set(
     "Content-Security-Policy",
     "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' https://static-cdn.jtvnw.net https://clips-media-assets2.twitch.tv https://clips-media-assets.twitch.tv; frame-src https://clips.twitch.tv; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
@@ -364,6 +500,52 @@ export async function handle(
   headers.set(
     "Permissions-Policy",
     'camera=(), microphone=(), geolocation=(), autoplay=(self "https://clips.twitch.tv")',
+  );
+  if (media.includes("youtube") || media.includes("x")) {
+    let csp = headers.get("Content-Security-Policy")!;
+    const youtube = media.includes("youtube"),
+      x = media.includes("x");
+    csp = csp
+      .replace(
+        "script-src 'self'",
+        "script-src 'self'" +
+          (youtube
+            ? " https://www.youtube.com/iframe_api https://www.youtube.com/s/player/"
+            : "") +
+          (x
+            ? " https://platform.twitter.com/widgets.js https://platform.twitter.com/js/"
+            : ""),
+      )
+      .replace(
+        "connect-src 'self'",
+        "connect-src 'self'" +
+          (x
+            ? " https://syndication.twitter.com https://cdn.syndication.twimg.com"
+            : ""),
+      )
+      .replace(
+        "frame-src https://clips.twitch.tv",
+        "frame-src https://clips.twitch.tv" +
+          (youtube ? " https://www.youtube.com" : "") +
+          (x
+            ? " https://platform.twitter.com https://syndication.twitter.com"
+            : ""),
+      );
+    headers.set("Content-Security-Policy", csp);
+    if (youtube)
+      headers.set(
+        "Permissions-Policy",
+        'camera=(), microphone=(), geolocation=(), autoplay=(self "https://clips.twitch.tv" "https://www.youtube.com")',
+      );
+  }
+  headers.set(
+    "Content-Security-Policy",
+    headers
+      .get("Content-Security-Policy")!
+      .replace(
+        "https://clips-media-assets.twitch.tv;",
+        "https://clips-media-assets.twitch.tv https://i.ytimg.com https://pbs.twimg.com;",
+      ),
   );
   return new Response(request.method === "HEAD" ? null : response.body, {
     status: response.status,

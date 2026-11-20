@@ -1,4 +1,4 @@
-// Clips have no interactive API. A floating cover settles before Twitch mounts.
+// One active media session; provider scripts mount only after the fixed cover settles.
 export const previewScript = `
 (() => {
   const owners = [...document.querySelectorAll('[data-preview]')];
@@ -7,6 +7,9 @@ export const previewScript = `
   const desktop = matchMedia('(hover: hover) and (pointer: fine)');
   const wide = matchMedia('(min-width: 432px)');
   let active = null, hoverTimer = null, hoverOwner = null, leaveTimer = null, closing = null, observedHero = false, fullscreenSession = false;
+  const provider = el => el.dataset.provider || 'twitch';
+  const name = el => provider(el) === 'youtube' ? 'YouTube' : provider(el) === 'x' ? 'X' : 'Twitch';
+  const fits = el => provider(el) !== 'twitch' || wide.matches;
   const autoAllowed = () => desktop.matches && !reduced.matches && !navigator.connection?.saveData;
   const clearHover = () => { clearTimeout(hoverTimer); hoverTimer = hoverOwner = null; };
   const clearLeave = () => { clearTimeout(leaveTimer); leaveTimer = null; };
@@ -16,7 +19,7 @@ export const previewScript = `
   const viewportWidth = () => document.documentElement.clientWidth;
   const visible = el => {
     const box = el.getBoundingClientRect();
-    return box.width >= 400 && box.height >= 300 && box.left >= -.5 && box.right <= viewportWidth() + .5 && box.top >= headerBottom() - .5 && box.bottom <= innerHeight + .5;
+    return box.width >= (el.dataset.provider === 'twitch' || !el.dataset.provider ? 400 : 200) && box.height >= (el.dataset.provider === 'twitch' || !el.dataset.provider ? 300 : 200) && box.left >= -.5 && box.right <= viewportWidth() + .5 && box.top >= headerBottom() - .5 && box.bottom <= innerHeight + .5;
   };
   const ownerVisible = el => {
     const box = el.getBoundingClientRect(), rail = el.closest('.catalog-rail').getBoundingClientRect();
@@ -44,7 +47,9 @@ export const previewScript = `
     const previous = active; active = null;
     const focused = previous.layer?.contains(document.activeElement);
     previous.animation?.cancel();
-    previous.stage.querySelector('iframe')?.remove();
+    previous.player?.destroy?.(); previous.mount?.remove();
+    previous.stage.querySelectorAll('iframe').forEach(frame => frame.remove());
+    previous.playButton?.remove(); clearTimeout(previous.timeout);
     mark(previous.el, false);
     previous.el.querySelector('.preview-status').textContent = 'Vista previa detenida.';
     if (!previous.layer) return;
@@ -69,15 +74,55 @@ export const previewScript = `
     frame.referrerPolicy = 'strict-origin-when-cross-origin';
     return frame;
   };
-  const finish = entry => {
+  const scripts = new Map();
+  const load = (key, url, ready) => {
+    if (ready()) return Promise.resolve();
+    if (scripts.has(key)) return scripts.get(key);
+    const promise = new Promise((resolve, reject) => {
+      const script = document.createElement('script'); script.src = url; script.async = true;
+      const timeout = setTimeout(() => { script.remove(); scripts.delete(key); reject(Error('timeout')); }, 8000);
+      const done = () => { clearTimeout(timeout); resolve(); };
+      script.onerror = () => { clearTimeout(timeout); scripts.delete(key); script.remove(); reject(Error('unavailable')); };
+      if (key === 'youtube') window.onYouTubeIframeAPIReady = done;
+      else script.onload = done;
+      document.head.append(script);
+    }); scripts.set(key, promise); return promise;
+  };
+  const finish = async entry => {
     if (active !== entry) return;
     entry.animation?.cancel(); entry.animation = null;
-    if (document.hidden || !wide.matches || !visible(entry.stage) || (entry.layer && !ownerVisible(entry.el))) {
+    entry.stage.dataset.provider = provider(entry.el);
+    if (document.hidden || !fits(entry.el) || !visible(entry.stage) || (entry.layer && !ownerVisible(entry.el))) {
       stop({animate: false}); return;
     }
     if (entry.layer) entry.layer.dataset.phase = 'ready';
-    entry.stage.append(iframe(entry.el));
-    entry.el.querySelector('.preview-status').textContent = 'Inicio sin sonido. Twitch puede pedir confirmación; si no arranca, abre el original en Twitch.';
+    const status = entry.el.querySelector('.preview-status');
+    status.textContent = 'Inicio sin sonido. ' + name(entry.el) + ' puede pedir confirmación; si no arranca, abre el original en ' + name(entry.el) + '.';
+    if (provider(entry.el) === 'twitch') { entry.stage.append(iframe(entry.el)); return; }
+    const mount = document.createElement('div'); entry.mount = mount; entry.stage.append(mount);
+    try {
+      if (provider(entry.el) === 'youtube') {
+        await load('youtube','https://www.youtube.com/iframe_api',() => !!window.YT?.Player);
+        if (active !== entry) return;
+        const frame = document.createElement('iframe');
+        const url = new URL('https://www.youtube.com/embed/' + entry.el.dataset.preview);
+        for (const [key,value] of Object.entries({enablejsapi:'1',origin:location.origin,playsinline:'1',controls:'1',autoplay:'1',mute:'1'})) url.searchParams.set(key,value);
+        frame.src=url.href; frame.title='YouTube · '+entry.el.dataset.previewTitle; frame.allow='autoplay; fullscreen'; frame.allowFullscreen=true; frame.referrerPolicy='strict-origin-when-cross-origin'; mount.append(frame);
+        const button = document.createElement('button'); entry.playButton = button; button.type='button'; button.textContent='Reproducir en YouTube';
+        (entry.layer?.querySelector('.layer-footer') || entry.el.querySelector('.preview-toolbar')).append(button);
+        button.onclick=()=>entry.player?.playVideo();
+        entry.player=new window.YT.Player(frame,{events:{onReady:()=>{if(active!==entry)return;entry.player.mute();entry.player.playVideo();},onStateChange:event=>{if(active!==entry)return;if(event.data===1){button.hidden=true;status.textContent='Reproducción iniciada en YouTube. Controles disponibles en el vídeo.';}},onError:()=>{if(active!==entry)return;status.textContent='YouTube no disponible. Abre el original en YouTube.';button.hidden=false;}}});
+      } else {
+        status.textContent='Cargando publicación completa de X. Sin reproducción automática; abre el original si no está disponible.';
+        await load('x','https://platform.twitter.com/widgets.js',()=>!!window.twttr?.widgets?.createTweet);
+        if(active!==entry)return;
+        let timer;
+        const result=await Promise.race([window.twttr.widgets.createTweet(entry.el.dataset.preview,mount,{theme:'dark',dnt:true,conversation:'all',width:Math.floor(entry.stage.clientWidth)}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),8000);})]).finally(()=>clearTimeout(timer));
+        if(active!==entry){mount.remove();return;}
+        if(!result)throw Error('unavailable');
+        status.textContent='Publicación de X. Usa sus controles; no se garantiza reproducción ni disponibilidad.';
+      }
+    } catch { if(active===entry){mount.remove();status.textContent=name(entry.el)+' no disponible. Abre el original.';} }
   };
   const handoff = (event, el, layer) => {
     if (event.pointerType !== 'mouse' || document.fullscreenElement || fullscreenSession) return;
@@ -92,19 +137,32 @@ export const previewScript = `
     clearLeave();
     leaveTimer = setTimeout(() => { if (active?.el === el) stop({preserveHover: true}); }, 130);
   };
+  const focusHandoff = (event, el, layer) => {
+    const expected = active;
+    if (expected?.el !== el) return;
+    const left = target => !inside(el, target) && !inside(layer, target);
+    if (event.relatedTarget) { if (left(event.relatedTarget)) stop({restoreFocus: false}); return; }
+    // Cross-origin iframe focus can have a null relatedTarget. Check the settled
+    // parent focus instead of destroying the player during its own play click.
+    setTimeout(() => { if (active === expected && left(document.activeElement)) stop({restoreFocus: false}); }, 0);
+  };
   const makeLayer = el => {
     const width = Math.min(460, viewportWidth() - 24);
-    if (width < 402 || !ownerVisible(el)) return null;
+    if (width < (provider(el) === 'twitch' ? 402 : 222) || !ownerVisible(el)) return null;
     const layer = document.createElement('section');
     layer.className = 'card-preview-layer'; layer.id = 'clip-preview-layer';
     layer.dataset.previewOwner = el.id; layer.dataset.phase = 'opening';
     layer.setAttribute('role', 'region');
     layer.setAttribute('aria-label', 'Vista previa de ' + el.dataset.previewTitle);
     layer.innerHTML = '<div class="layer-heading"><div><p class="eyebrow">VISTA PREVIA</p><h2></h2><p class="layer-creator"></p></div><button type="button" data-preview-close>Cerrar vista previa</button></div><div class="preview-stage"><span class="preview-placeholder">Vista previa · Twitch</span></div><div class="layer-footer"><a class="button primary" target="_blank" rel="noopener noreferrer">Ver en Twitch</a><p>Inicio sin sonido. Twitch puede pedir confirmación.</p></div>';
+    layer.dataset.provider = provider(el);
+    layer.querySelector('.preview-placeholder').textContent = 'Vista previa · ' + name(el);
+    layer.querySelector('a').textContent = 'Ver en ' + name(el);
+    layer.querySelector('.layer-footer p').textContent = provider(el) === 'x' ? 'Publicación completa; activa el vídeo desde X.' : 'Inicio sin sonido. El proveedor puede pedir confirmación.';
     layer.querySelector('h2').textContent = el.dataset.previewTitle;
-    layer.querySelector('.layer-creator').textContent = 'Por ' + (el.querySelector('.creator strong')?.textContent || '') + ' · Twitch';
-    layer.querySelector('a').href = 'https://clips.twitch.tv/' + el.dataset.preview;
-    const stage = layer.querySelector('.preview-stage');
+    layer.querySelector('.layer-creator').textContent = 'Por ' + (el.querySelector('.creator strong')?.textContent || '') + ' · ' + name(el);
+    layer.querySelector('a').href = el.dataset.sourceUrl || 'https://clips.twitch.tv/' + el.dataset.preview;
+    const stage = layer.querySelector('.preview-stage'); stage.dataset.provider = provider(el); stage.dataset.orientation = el.dataset.orientation || 'auto';
     const poster = el.querySelector('.poster img');
     if (poster?.naturalWidth) {
       const cover = poster.cloneNode(false); cover.alt = ''; cover.hidden = false;
@@ -122,25 +180,23 @@ export const previewScript = `
     layer.querySelector('[data-preview-close]').addEventListener('click', () => stop());
     layer.addEventListener('pointerenter', () => { if (active?.el === el) clearLeave(); });
     layer.addEventListener('pointerleave', event => handoff(event, el, layer));
-    layer.addEventListener('focusout', event => {
-      if (!inside(layer, event.relatedTarget) && !inside(el, event.relatedTarget) && active?.el === el) stop({restoreFocus: false});
-    });
+    layer.addEventListener('focusout', event => focusHandoff(event, el, layer));
     return {layer, stage, anchor};
   };
   const start = (el, manual = false) => {
     clearTimers();
     if (active?.el === el) return;
-    if (document.hidden || !wide.matches || (!manual && !autoAllowed()) || !/^[A-Za-z0-9_-]{1,100}$/.test(el.dataset.preview)) return;
+    if (document.hidden || !fits(el) || (!manual && (!autoAllowed() || provider(el) === 'x')) || !/^[A-Za-z0-9_-]{1,100}$/.test(el.dataset.preview)) return;
     stop({animate: false, restoreFocus: false}); discardClosing();
     if (el === hero) {
-      const stage = el.querySelector('.preview-stage');
+      const stage = el.querySelector('.preview-stage'); stage.dataset.provider = provider(el); stage.dataset.orientation = el.dataset.orientation || 'auto';
       if (manual && !visible(stage)) stage.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'instant'});
       if (!visible(stage)) return;
       active = {el, stage, layer: null, animation: null}; mark(el, true); finish(active); return;
     }
     const floating = makeLayer(el);
     if (!floating) {
-      el.querySelector('.preview-status').textContent = 'No hay espacio para el reproductor completo. Abre el original en Twitch.'; return;
+      el.querySelector('.preview-status').textContent = 'No hay espacio para el reproductor completo. Abre el original.'; return;
     }
     const {layer, stage, anchor} = floating;
     const entry = {el, layer, stage, animation: null}; active = entry; mark(el, true);
@@ -157,6 +213,7 @@ export const previewScript = `
     entry.animation.finished.then(() => finish(entry)).catch(() => {});
   };
   for (const el of owners) {
+    const stage=el.querySelector('.preview-stage'); if(stage)stage.dataset.provider=provider(el);
     el.querySelector('.preview-toolbar').hidden = false;
     el.querySelector('[data-preview-toggle]').addEventListener('click', () => active?.el === el ? stop() : start(el, true));
     if (el !== hero) {
@@ -168,14 +225,12 @@ export const previewScript = `
         hoverTimer = setTimeout(() => { hoverTimer = hoverOwner = null; start(el); }, 550);
       });
       el.addEventListener('pointerleave', event => handoff(event, el, active?.el === el ? active.layer : null));
-      el.addEventListener('focusout', event => {
-        if (active?.el === el && !inside(el, event.relatedTarget) && !inside(active.layer, event.relatedTarget)) stop({restoreFocus: false});
-      });
+      el.addEventListener('focusout', event => focusHandoff(event, el, active?.el === el ? active.layer : null));
     }
   }
   const check = () => {
     if (document.fullscreenElement || fullscreenSession) return;
-    if (active && (!wide.matches || (active.layer ? !ownerVisible(active.el) || (active.layer.dataset.phase === 'ready' && !visible(active.stage)) : !visible(active.stage)))) stop({animate: false});
+    if (active && (!fits(active.el) || (active.layer ? !ownerVisible(active.el) || (active.layer.dataset.phase === 'ready' && !visible(active.stage)) : !visible(active.stage)))) stop({animate: false});
   };
   const observer = new IntersectionObserver(() => {
     check();
@@ -184,7 +239,7 @@ export const previewScript = `
     }
   }, {threshold: [0, .5, 1]});
   for (const el of owners) observer.observe(el);
-  addEventListener('scroll', () => { if (document.fullscreenElement || fullscreenSession) return; clearTimers(); if (active?.layer) stop({animate: false}); else check(); }, {passive: true, capture: true});
+  addEventListener('scroll', event => { if (active && provider(active.el) === 'x' && inside(active.stage,event.target)) return; if (document.fullscreenElement || fullscreenSession) return; clearTimers(); if (active?.layer) stop({animate: false}); else check(); }, {passive: true, capture: true});
   addEventListener('resize', () => { if (document.fullscreenElement || fullscreenSession) return; clearTimers(); if (active?.layer) stop({animate: false}); else check(); });
   document.addEventListener('fullscreenchange', () => {
     if (document.fullscreenElement) { fullscreenSession = true; clearTimers(); }

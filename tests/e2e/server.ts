@@ -109,6 +109,7 @@ await db.exec(
         "0001_editions.sql",
         "0002_twitch.sql",
         "0003_candidate_thumbnails.sql",
+        "0004_manual_inbox.sql",
       ].map((name) => readFile("migrations/" + name, "utf8")),
     )
   )

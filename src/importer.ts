@@ -364,10 +364,22 @@ export async function importTwitch(
       const clips: Omit<Candidate, "review_state">[] = result.data.map(
         (v: unknown) => candidate(v, run.game_id!, now - 86400000, now),
       );
+      // A manually captured source already has a canonical private review record.
+      // Do not create another candidate or revive a discarded manual source.
+      // pageSize is fixed at 100: this query stays within D1's 100 bindings.
+      const manual = clips.length
+        ? await env.DB.prepare(
+            `SELECT source_id FROM manual_candidates WHERE provider='twitch' AND source_id IN (${clips.map(() => "?").join(",")})`,
+          )
+            .bind(...clips.map((c) => c.id))
+            .all<{ source_id: string }>()
+        : { results: [] };
+      const manualIds = new Set(manual.results.map((c) => c.source_id));
+      const importedClips = clips.filter((c) => !manualIds.has(c.id));
       const nextIds = new Set(ids);
-      for (const c of clips) nextIds.add(c.id);
+      for (const c of importedClips) nextIds.add(c.id);
       const progress = { ...run, pages: run.pages + 1, saved: nextIds.size };
-      const writes = clips.map((c) =>
+      const writes = importedClips.map((c) =>
         env.DB.prepare(
           `INSERT INTO candidates(id,url,streamer,title,language,game_id,created_at,duration,views,observed_at,thumbnail) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE ${owned} ON CONFLICT(id) DO UPDATE SET url=excluded.url,streamer=excluded.streamer,title=excluded.title,language=excluded.language,game_id=excluded.game_id,created_at=excluded.created_at,duration=excluded.duration,views=excluded.views,observed_at=excluded.observed_at,thumbnail=COALESCE(excluded.thumbnail,candidates.thumbnail)`,
         ).bind(
@@ -391,7 +403,7 @@ export async function importTwitch(
       // Only committed, ownership-fenced pages contribute to saved totals.
       run.pages = progress.pages;
       run.saved = progress.saved;
-      for (const c of clips) ids.add(c.id);
+      for (const c of importedClips) ids.add(c.id);
       if (!next) break;
       if (cursors.has(next)) fail("repeated_cursor");
       cursors.add(next);

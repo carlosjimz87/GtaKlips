@@ -262,6 +262,12 @@ before(async () => {
       await readFile("migrations/0003_candidate_thumbnails.sql", "utf8")
     ).replace(/\n/g, " "),
   );
+  await db.exec(
+    (await readFile("migrations/0004_manual_inbox.sql", "utf8")).replace(
+      /\n/g,
+      " ",
+    ),
+  );
 });
 after(async () => {
   await mf?.dispose();
@@ -589,6 +595,7 @@ test("missing config skips network; configured category is verified by ID, never
         "0001_editions.sql",
         "0002_twitch.sql",
         "0003_candidate_thumbnails.sql",
+        "0004_manual_inbox.sql",
       ])
         await database.exec(
           (await readFile("migrations/" + name, "utf8")).replace(/\n/g, " "),
@@ -788,5 +795,50 @@ test("valid optional Twitch posters persist and an invalid replacement preserves
     );
   } finally {
     transport.mock.restore();
+  }
+});
+
+test("manual-first Twitch capture is not duplicated or revived by later imports", async () => {
+  // The fixture's normal API response contains ImportDemo; use its existing row
+  // only after saving and restoring it so earlier acceptance remains unchanged.
+  const original = await db
+    .prepare("SELECT * FROM candidates WHERE id='ImportDemo'")
+    .first<any>();
+  await db.prepare("DELETE FROM candidates WHERE id='ImportDemo'").run();
+  await db
+    .prepare(
+      "INSERT INTO manual_candidates(id,provider,source_id,url,captured_date,created_at,state,title,text) VALUES('ImportDemo','twitch','ImportDemo','https://clips.twitch.tv/ImportDemo','2039-06-01','2039-06-01T00:00:00Z','discarded','Editorial manual','Contexto conservado')",
+    )
+    .run();
+  try {
+    const result = await run();
+    assert.equal(result.error_code, null);
+    assert.equal(result.found, 1);
+    assert.equal(result.saved, 0);
+    assert.equal(
+      await db
+        .prepare("SELECT count(*) AS n FROM candidates WHERE id='ImportDemo'")
+        .first("n"),
+      0,
+    );
+    const manual = await db
+      .prepare("SELECT * FROM manual_candidates WHERE id='ImportDemo'")
+      .first<any>();
+    assert.equal(manual.state, "discarded");
+    assert.equal(manual.title, "Editorial manual");
+    assert.equal(manual.text, "Contexto conservado");
+  } finally {
+    await db
+      .prepare("DELETE FROM manual_candidates WHERE id='ImportDemo'")
+      .run();
+    if (original) {
+      const keys = Object.keys(original);
+      await db
+        .prepare(
+          `INSERT INTO candidates(${keys.join(",")}) VALUES(${keys.map(() => "?").join(",")})`,
+        )
+        .bind(...keys.map((k) => original[k]))
+        .run();
+    }
   }
 });
