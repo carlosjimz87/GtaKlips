@@ -480,4 +480,7 @@ button:focus-visible {
 }
 
 .preview-stage[data-orientation="square"]{aspect-ratio:1/1}
+.brand { display: inline-flex; align-items: center; gap: .4em; }
+.brand b { font-weight: inherit; }
+.brand-logo { width: 1.5em; height: 1.5em; border-radius: 50%; flex: none; display: block; }
 `;
