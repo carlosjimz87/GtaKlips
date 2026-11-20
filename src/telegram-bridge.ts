@@ -190,7 +190,7 @@ async function processUpdate(
                   s = p.suggestion;
                 text += `\nAutor del post: ${e.author} ${e.handle} (no acredita al streamer).\nComentarios ${e.comments.length}/${e.commentsRequested}: ${e.commentsReason}\nOrientación detectada: ${p.orientation} ${e.width}×${e.height} (${e.dimensionSource}). Imagen: ${e.imageType} (poster no garantiza fotograma inicial).`;
                 if (s)
-                  text += `\nTítulo sugerido: ${s.title}\nStreamer: ${s.streamer || "desconocido"}\nContexto sugerido: ${s.text}\nCategoría sugerida: ${s.category}\nEvidencia de streamer: ${s.evidence.streamer || "no disponible"}`;
+                  text += `\nTítulo sugerido: ${s.title}\nStreamer: ${s.streamer || "desconocido (se usará el autor del post)"}\nContexto sugerido: ${s.text}\nCategoría sugerida: ${s.category}\nEvidencia de streamer: ${s.evidence.streamer || "no disponible"}`;
                 else
                   text += e.text.trim()
                     ? "\nModelo local no disponible; extracción parcial."

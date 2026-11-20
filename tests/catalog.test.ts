@@ -107,10 +107,10 @@ test("public catalog exposes credited sources, real anchor targets and restricte
   const html = await response.text();
   assert.equal((html.match(/<article class=/g) || []).length, 5);
   assert.ok(html.includes('id="clip-Catalog2"'));
-  assert.ok(html.includes("Reproducir en Twitch"));
+  assert.ok(html.includes("Play on Twitch"));
   assert.ok(html.includes("https://clips.twitch.tv/Catalog2"));
   assert.ok(html.includes("Creador 2"));
-  assert.ok(html.includes("DEMOSTRACIÓN"));
+  assert.ok(html.includes("DEMO"));
   assert.ok(
     response.headers
       .get("Content-Security-Policy")
@@ -140,7 +140,7 @@ test("search and categories combine without changing canonical or exposing unpub
       "https://example.com/dia/" + edition.date + "?q=%3Cscript%3E",
     )
   ).text();
-  assert.ok(html.includes("No hay clips con esa selección"));
+  assert.ok(html.includes("No clips match that selection"));
   assert.ok(!html.includes("<script>"));
   const db = await runtime.getD1Database("DB");
   await db
@@ -175,4 +175,12 @@ test("preview embeds are deferred, escaped and confined to the official frame ho
       .get("Permissions-Policy")
       ?.includes('autoplay=(self "https://clips.twitch.tv")'),
   );
+});
+
+test("credit label: Video of streamer, else Post of creator, else Anonymous", async () => {
+  const { credit } = await import("../src/model");
+  assert.equal(credit({ streamer: "Ana", creator: "@bob" }), "Video of Ana");
+  assert.equal(credit({ streamer: " ", creator: "@bob" }), "Post of @bob");
+  assert.equal(credit({ streamer: "", creator: "" }), "Anonymous");
+  assert.equal(credit({}), "Anonymous");
 });

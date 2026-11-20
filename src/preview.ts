@@ -32,7 +32,7 @@ export const previewScript = `
   const mark = (el, playing) => {
     el.classList.toggle('previewing', playing);
     const button = el.querySelector('[data-preview-toggle]');
-    button.textContent = playing ? 'Detener vista previa' : 'Vista previa';
+    button.textContent = playing ? 'Stop preview' : 'Preview';
     button.setAttribute('aria-pressed', String(playing));
     if (el !== hero) {
       button.setAttribute('aria-expanded', String(playing));
@@ -51,7 +51,7 @@ export const previewScript = `
     previous.stage.querySelectorAll('iframe').forEach(frame => frame.remove());
     previous.playButton?.remove(); clearTimeout(previous.timeout);
     mark(previous.el, false);
-    previous.el.querySelector('.preview-status').textContent = 'Vista previa detenida.';
+    previous.el.querySelector('.preview-status').textContent = 'Preview stopped.';
     if (!previous.layer) return;
     const layer = previous.layer;
     if (focused && restoreFocus) previous.el.querySelector('[data-preview-toggle]').focus({preventScroll: true});
@@ -69,7 +69,7 @@ export const previewScript = `
     url.searchParams.set('parent', location.hostname);
     url.searchParams.set('autoplay', 'true'); url.searchParams.set('muted', 'true');
     const frame = document.createElement('iframe');
-    frame.src = url.href; frame.title = 'Vista previa de ' + el.dataset.previewTitle;
+    frame.src = url.href; frame.title = 'Preview of ' + el.dataset.previewTitle;
     frame.allow = 'autoplay; fullscreen'; frame.allowFullscreen = true;
     frame.referrerPolicy = 'strict-origin-when-cross-origin';
     return frame;
@@ -97,7 +97,7 @@ export const previewScript = `
     }
     if (entry.layer) entry.layer.dataset.phase = 'ready';
     const status = entry.el.querySelector('.preview-status');
-    status.textContent = 'Inicio sin sonido. ' + name(entry.el) + ' puede pedir confirmación; si no arranca, abre el original en ' + name(entry.el) + '.';
+    status.textContent = 'Starts muted. ' + name(entry.el) + ' may ask for confirmation; if it does not start, open the original on ' + name(entry.el) + '.';
     if (provider(entry.el) === 'twitch') { entry.stage.append(iframe(entry.el)); return; }
     const mount = document.createElement('div'); entry.mount = mount; entry.stage.append(mount);
     try {
@@ -111,16 +111,16 @@ export const previewScript = `
         const button = document.createElement('button'); entry.playButton = button; button.type='button'; button.textContent='Reproducir en YouTube';
         (entry.layer?.querySelector('.layer-footer') || entry.el.querySelector('.preview-toolbar')).append(button);
         button.onclick=()=>entry.player?.playVideo();
-        entry.player=new window.YT.Player(frame,{events:{onReady:()=>{if(active!==entry)return;entry.player.mute();entry.player.playVideo();},onStateChange:event=>{if(active!==entry)return;if(event.data===1){button.hidden=true;status.textContent='Reproducción iniciada en YouTube. Controles disponibles en el vídeo.';}},onError:()=>{if(active!==entry)return;status.textContent='YouTube no disponible. Abre el original en YouTube.';button.hidden=false;}}});
+        entry.player=new window.YT.Player(frame,{events:{onReady:()=>{if(active!==entry)return;entry.player.mute();entry.player.playVideo();},onStateChange:event=>{if(active!==entry)return;if(event.data===1){button.hidden=true;status.textContent='Playing on YouTube. Controls are available on the video.';}},onError:()=>{if(active!==entry)return;status.textContent='YouTube unavailable. Open the original on YouTube.';button.hidden=false;}}});
       } else {
-        status.textContent='Cargando publicación completa de X. Sin reproducción automática; abre el original si no está disponible.';
+        status.textContent='Loading the full X post. No autoplay; open the original if it is unavailable.';
         await load('x','https://platform.twitter.com/widgets.js',()=>!!window.twttr?.widgets?.createTweet);
         if(active!==entry)return;
         let timer;
         const result=await Promise.race([window.twttr.widgets.createTweet(entry.el.dataset.preview,mount,{theme:'dark',dnt:true,conversation:'all',width:Math.floor(entry.stage.clientWidth)}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),8000);})]).finally(()=>clearTimeout(timer));
         if(active!==entry){mount.remove();return;}
         if(!result)throw Error('unavailable');
-        status.textContent='Publicación de X. Usa sus controles; no se garantiza reproducción ni disponibilidad.';
+        status.textContent='X post. Use its controls; playback and availability are not guaranteed.';
       }
     } catch { if(active===entry){mount.remove();status.textContent=name(entry.el)+' no disponible. Abre el original.';} }
   };
@@ -153,14 +153,14 @@ export const previewScript = `
     layer.className = 'card-preview-layer'; layer.id = 'clip-preview-layer';
     layer.dataset.previewOwner = el.id; layer.dataset.phase = 'opening';
     layer.setAttribute('role', 'region');
-    layer.setAttribute('aria-label', 'Vista previa de ' + el.dataset.previewTitle);
-    layer.innerHTML = '<div class="layer-heading"><div><p class="eyebrow">VISTA PREVIA</p><h2></h2><p class="layer-creator"></p></div><button type="button" data-preview-close>Cerrar vista previa</button></div><div class="preview-stage"><span class="preview-placeholder">Vista previa · Twitch</span></div><div class="layer-footer"><a class="button primary" target="_blank" rel="noopener noreferrer">Ver en Twitch</a><p>Inicio sin sonido. Twitch puede pedir confirmación.</p></div>';
+    layer.setAttribute('aria-label', 'Preview of ' + el.dataset.previewTitle);
+    layer.innerHTML = '<div class="layer-heading"><div><p class="eyebrow">PREVIEW</p><h2></h2><p class="layer-creator"></p></div><button type="button" data-preview-close>Close preview</button></div><div class="preview-stage"><span class="preview-placeholder">Preview · Twitch</span></div><div class="layer-footer"><a class="button primary" target="_blank" rel="noopener noreferrer">Watch on Twitch</a><p>Starts muted. Twitch may ask for confirmation.</p></div>';
     layer.dataset.provider = provider(el);
-    layer.querySelector('.preview-placeholder').textContent = 'Vista previa · ' + name(el);
-    layer.querySelector('a').textContent = 'Ver en ' + name(el);
-    layer.querySelector('.layer-footer p').textContent = provider(el) === 'x' ? 'Publicación completa; activa el vídeo desde X.' : 'Inicio sin sonido. El proveedor puede pedir confirmación.';
+    layer.querySelector('.preview-placeholder').textContent = 'Preview · ' + name(el);
+    layer.querySelector('a').textContent = 'Watch on ' + name(el);
+    layer.querySelector('.layer-footer p').textContent = provider(el) === 'x' ? 'Full post; start the video from X.' : 'Starts muted. The provider may ask for confirmation.';
     layer.querySelector('h2').textContent = el.dataset.previewTitle;
-    layer.querySelector('.layer-creator').textContent = 'Por ' + (el.querySelector('.creator strong')?.textContent || '') + ' · ' + name(el);
+    layer.querySelector('.layer-creator').textContent = (el.querySelector('.creator strong')?.textContent || '') + ' · ' + name(el);
     layer.querySelector('a').href = el.dataset.sourceUrl || 'https://clips.twitch.tv/' + el.dataset.preview;
     const stage = layer.querySelector('.preview-stage'); stage.dataset.provider = provider(el); stage.dataset.orientation = el.dataset.orientation || 'auto';
     const poster = el.querySelector('.poster img');

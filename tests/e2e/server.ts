@@ -114,6 +114,8 @@ await db.exec(
         "0004_manual_inbox.sql",
         "0005_x_enrichment.sql",
         "0006_auto_import.sql",
+        "0007_x_posts.sql",
+        "0008_creator_credit.sql",
       ].map((name) => readFile("migrations/" + name, "utf8")),
     )
   )

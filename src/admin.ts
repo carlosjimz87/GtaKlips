@@ -12,8 +12,8 @@ const field = (label, name, value = "", type = "text") => {
   i.name = name;
   i.value = value;
   if (type !== "textarea") i.type = type;
-  i.required = name !== "thumbnail";
-  i.maxLength = { url: 300, thumbnail: 1500, streamer: 80, title: 120, text: 400 }[name] || 400;
+  i.required = !["thumbnail", "streamer", "creator"].includes(name);
+  i.maxLength = { url: 300, thumbnail: 1500, streamer: 80, creator: 80, title: 120, text: 400 }[name] || 400;
   l.append(i);
   return l;
 };
@@ -26,7 +26,8 @@ function add(c = {}) {
   box.append(legend);
   box.append(
     field("URL del clip (Twitch, YouTube o X)", "url", c.url),
-    field("Streamer · crédito", "streamer", c.streamer),
+    field("Streamer (crédito «Video of», opcional)", "streamer", c.streamer),
+    field("Autor del post (crédito «Post of», opcional)", "creator", c.creator),
     field("Título del clip", "title", c.title),
     field("Contexto editorial en español", "text", c.text, "textarea"),
     field("Miniatura de Twitch / YouTube / X (opcional)", "thumbnail", c.thumbnail, "text"),
@@ -94,7 +95,7 @@ function add(c = {}) {
 function data() {
   const clips = [...list.children].map((box) => {
     const c = {};
-    ["url", "streamer", "title", "text", "category", "thumbnail", "orientation"].forEach(
+    ["url", "streamer", "creator", "title", "text", "category", "thumbnail", "orientation"].forEach(
       (k) => (c[k] = box.querySelector("[name=" + k + "]").value),
     );
     if (box.dataset.duration) c.duration = Number(box.dataset.duration);
@@ -223,7 +224,7 @@ async function init() {
         const r = await fetch("/admin/candidate?id=" + encodeURIComponent(candidate));
         const c = await r.json();
         if (!r.ok) throw Error(c.error);
-        add({ url: c.url, streamer: c.streamer, title: c.title, thumbnail: c.thumbnail || "", duration: c.duration });
+        add({ url: c.url, streamer: c.streamer, creator: c.creator, title: c.title, thumbnail: c.thumbnail || "", duration: c.duration });
         message("Fuente importada. Escribe contexto original y revisa disponibilidad y derechos. No se ha guardado ni publicado.");
       } catch (e) { add(); message(e.message); }
     } else add();

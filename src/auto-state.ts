@@ -3,7 +3,6 @@ import { categories } from "./model";
 export function missingFields(c: ManualCandidate) {
   const fields: string[] = [];
   if (!c.title.trim()) fields.push("título");
-  if (!c.streamer.trim()) fields.push("crédito del creador");
   if (!c.text.trim()) fields.push("contexto");
   if (!categories.includes(c.category as any)) fields.push("categoría");
   return fields;

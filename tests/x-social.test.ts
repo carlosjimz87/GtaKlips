@@ -45,7 +45,7 @@ test("creator hunt asks for the creator and links the source", () => {
     { id: "k1", url: "https://youtu.be/abc" },
     "https://g.example",
   );
-  assert.match(d.text, /¿Quién es el creador/);
+  assert.match(d.text, /Who made this clip/);
   assert.match(d.text, /youtu\.be\/abc/);
   assert.equal(d.kind, "creator_hunt");
 });

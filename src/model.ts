@@ -15,6 +15,8 @@ export interface Clip {
   id: string;
   url: string;
   streamer: string;
+  /** Author of the source post when the streamer is unknown. */
+  creator?: string;
   title: string;
   text: string;
   category: string;
@@ -28,6 +30,10 @@ export interface Edition {
   reviewed: boolean;
   featured: string;
   clips: Clip[];
+}
+/** Optional credit field: blank is allowed («Anonymous» is the public fallback). */
+function optional(v: unknown): string {
+  return v === undefined || v === null || v === "" ? "" : str(v, 80);
 }
 export function str(v: unknown, max: number): string {
   if (
@@ -126,7 +132,8 @@ export function validate(v: any, publish = false): Edition {
       ...(c.orientation ? { orientation: c.orientation } : {}),
       ...(image ? { thumbnail: image } : {}),
       ...(c.duration !== undefined ? { duration: c.duration } : {}),
-      streamer: str(c.streamer, 80),
+      streamer: optional(c.streamer),
+      ...(optional(c.creator) ? { creator: optional(c.creator) } : {}),
       title: str(c.title, 120),
       text: str(c.text, 400),
       category: c.category,
@@ -161,5 +168,21 @@ export const esc = (s: unknown) =>
       ]!,
   );
 export function post(e: Edition, origin: string): string {
-  return `${e.demo ? "[DEMOSTRACIÓN · fuentes no verificadas] " : ""}${e.hook}\n${e.clips.length} clips en GtaKlips. #gtavi\n${origin}/dia/${e.date}?utm_source=x&utm_medium=organic_social&utm_campaign=estreno_gtavi&utm_content=destacado#clip-${e.featured}`;
+  return `${e.demo ? "[DEMO · unverified sources] " : ""}${e.hook}\n${e.clips.length} clips on GtaKlips. #gtavi\n${origin}/dia/${e.date}?utm_source=x&utm_medium=organic_social&utm_campaign=estreno_gtavi&utm_content=destacado#clip-${e.featured}`;
 }
+
+/** Public credit: «Video of» the streamer, else «Post of» the post author, else «Anonymous». */
+export function credit(c: { streamer?: string; creator?: string }): string {
+  const streamer = (c.streamer || "").trim(),
+    creator = (c.creator || "").trim();
+  if (streamer) return `Video of ${streamer}`;
+  if (creator) return `Post of ${creator}`;
+  return "Anonymous";
+}
+/** Display labels for the stored (Spanish) category keys. */
+export const categoryLabels: Record<string, string> = {
+  Fails: "Fails",
+  Jugadas: "Plays",
+  Detalles: "Details",
+  Reacciones: "Reactions",
+};

@@ -10,7 +10,7 @@ import {
   type ManualCandidate,
 } from "./inbox";
 import { missingFields } from "./auto-state";
-import { categories, validate, type Edition } from "./model";
+import { categories, credit, validate, type Edition } from "./model";
 import { editionWrite } from "./edition-store";
 import { extractURLs } from "./telegram";
 import { queueEnrichment } from "./enrichment";
@@ -96,7 +96,7 @@ async function board(env: Env, date: string, ids: string[], r: AutoReply) {
           : missing.length
             ? "Falta: " + missing.join(", ")
             : "Completo; revisa antes de publicar";
-    r.text += `\n${i + 1}. ${c.title || c.url}\n${c.streamer || "Crédito pendiente"} · ${c.category || "Categoría pendiente"}\n${c.text ? c.text.slice(0, 130) : "Contexto pendiente"}\n${state}${job?.error ? " · " + job.error : ""}${busy && Date.now() - job.updated_at > 180000 ? " · Comprueba que el procesador local esté activo" : ""}\n`;
+    r.text += `\n${i + 1}. ${c.title || c.url}\n${credit(c)} · ${c.category || "Categoría pendiente"}\n${c.text ? c.text.slice(0, 130) : "Contexto pendiente"}\n${state}${job?.error ? " · " + job.error : ""}${busy && Date.now() - job.updated_at > 180000 ? " · Comprueba que el procesador local esté activo" : ""}\n`;
     r.keyboard.push([
       button(
         env,
@@ -183,7 +183,7 @@ async function preview(env: Env, date: string, r: AutoReply) {
       removed.map((c) => c.title || c.id).join(", ") +
       "\n";
   for (const [i, c] of clips.entries())
-    r.text += `\n${i + 1}. ${c.title}\n${c.url}\nCrédito: ${c.streamer}\nCategoría: ${c.category}\nContexto: ${c.text}\nOrientación: ${c.orientation || "auto"} · Duración: ${c.duration ? c.duration + " s" : "no indicada"}\nMiniatura: ${c.thumbnail || "no indicada"}\n`;
+    r.text += `\n${i + 1}. ${c.title}\n${c.url}\nCrédito público: ${credit(c)}\nCategoría: ${c.category}\nContexto: ${c.text}\nOrientación: ${c.orientation || "auto"} · Duración: ${c.duration ? c.duration + " s" : "no indicada"}\nMiniatura: ${c.thumbnail || "no indicada"}\n`;
   try {
     validate({ ...edition, reviewed: true }, true);
   } catch (e) {
@@ -291,7 +291,7 @@ export async function autoUpdate(
     }
     r.writes.push(fenceCandidate(env, c), clearGuard(env));
     if (b.action === "edit") {
-      r.text = `${c.title || c.url}\nCrédito: ${c.streamer || "pendiente"}\nContexto: ${c.text || "pendiente"}\nCategoría: ${c.category || "pendiente"}\nOrigen de campos: ${c.field_sources || "{}"}\nElige qué editar. Orden, destacado y textos de edición: admin.`;
+      r.text = `${c.title || c.url}\nCrédito público: ${credit(c)}\nContexto: ${c.text || "pendiente"}\nCategoría: ${c.category || "pendiente"}\nOrigen de campos: ${c.field_sources || "{}"}\nElige qué editar. Orden, destacado y textos de edición: admin.`;
       for (const [field, label] of [
         ["title", "Título"],
         ["streamer", "Crédito"],

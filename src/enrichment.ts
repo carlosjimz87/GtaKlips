@@ -51,6 +51,9 @@ export function missingPatch(c: ManualCandidate, p: Proposal) {
   if (p.suggestion) {
     for (const k of ["title", "streamer", "text"] as const)
       if (!c[k] && p.suggestion[k]) patch[k] = p.suggestion[k];
+    // The post author is only a fallback credit («Post of»), never the streamer.
+    const creator = (p.extraction.handle || p.extraction.author || "").trim();
+    if (!c.creator && creator) patch.creator = creator;
     if (!c.category || (c.revision === 1 && c.category === "Fails"))
       patch.category = p.suggestion.category;
   }
