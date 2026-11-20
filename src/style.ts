@@ -478,4 +478,6 @@ button:focus-visible {
  .catalog-card[data-provider=youtube] .preview-toolbar, .catalog-card[data-provider=x] .preview-toolbar { display: flex; }
  .card-preview-layer[data-provider=youtube] .preview-stage, .card-preview-layer[data-provider=x] .preview-stage { height: 240px; }
 }
+
+.preview-stage[data-orientation="square"]{aspect-ratio:1/1}
 `;
