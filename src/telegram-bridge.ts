@@ -61,7 +61,11 @@ async function processUpdate(
     const position = keyboard.length / 2 + 1;
     const proposalRevision =
       c.provider === "x"
-        ? (await enrichmentStatus(env, c.id)).created_at || 0
+        ? (await env.DB.prepare(
+            "SELECT created_at FROM enrichment_results WHERE candidate=?",
+          )
+            .bind(c.id)
+            .first<number>("created_at")) || 0
         : 0;
     for (const [action, label] of [
       ["toggle", "Seleccionar/quitar"],
@@ -178,7 +182,9 @@ async function processUpdate(
                 if (s)
                   text += `\nTítulo sugerido: ${s.title}\nStreamer: ${s.streamer || "desconocido"}\nContexto sugerido: ${s.text}\nCategoría sugerida: ${s.category}\nEvidencia de streamer: ${s.evidence.streamer || "no disponible"}`;
                 else
-                  text += "\nModelo local no disponible; extracción parcial.";
+                  text += e.text.trim()
+                    ? "\nModelo local no disponible; extracción parcial."
+                    : "\nPublicación sin texto: sólo se extraen medios, sin inventar metadatos editoriales.";
               }
               text +=
                 "\nAplicar vacíos requiere tu botón explícito. No publica ni aprueba revisión. Consulta imagen/evidencia en la bandeja web.";

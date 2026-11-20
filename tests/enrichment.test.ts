@@ -724,3 +724,80 @@ test("quote typography maps to the original evidence and Spanish pronouns/proper
   assert.equal(spanishOutput("La publicación les atribuye una maniobra"), true);
   assert.equal(spanishOutput("Un detalle de The Last of Us"), true);
 });
+
+test("video-only posts retain their image and dimensions without any model request or invented editorial fields", async () => {
+  const calls: string[] = [],
+    jpeg = Buffer.from(fixtureJPEG, "base64");
+  await createEnrichmentRunner(
+    enrichmentConfig({
+      ENRICHMENT_MODEL: "fixture-model",
+      LOCAL_BRIDGE_SECRET: secret,
+    }),
+    async (url, options) => {
+      calls.push(String(url));
+      if (String(url).endsWith("/claim"))
+        return Response.json({
+          job: {
+            candidate: "x:701",
+            token: "fixture",
+            url: "https://x.com/test/status/701",
+          },
+        });
+      assert.ok(
+        String(url).endsWith("/finish"),
+        "No Ollama or fail request is permitted",
+      );
+      const body = JSON.parse(String(options?.body));
+      assert.equal(body.proposal.suggestion, null);
+      assert.equal(body.proposal.modelStatus, "unavailable");
+      assert.equal(body.proposal.orientation, "landscape");
+      assert.equal(body.proposal.extraction.text, "");
+      assert.equal(body.proposal.extraction.imageType, "provider_poster");
+      assert.match(
+        body.proposal.thumbnail,
+        /^\/media\/enrichment\/[a-f0-9]{64}\.jpg$/,
+      );
+      assert.equal(body.jpeg, fixtureJPEG);
+      return Response.json({ ok: true });
+    },
+    async () => ({
+      extraction: { ...e, text: "", imageType: "provider_poster" },
+      jpeg,
+    }),
+  ).cycle();
+  assert.equal(calls.length, 2);
+});
+
+test("an old invalid proposal cannot prevent the owner bot from capturing links and returning fresh controls", async () => {
+  const db = await runtime.getD1Database("DB"),
+    owner = "00000000-0000-4000-8000-000000000001";
+  await capture("709");
+  await db
+    .prepare("INSERT INTO enrichment_results VALUES(?,?,?)")
+    .bind("x:709", '{"outdated":true}', 1)
+    .run();
+  await post("/internal/telegram/lease", { owner });
+  const response = await post("/internal/telegram/update", {
+    owner,
+    update: {
+      update_id: 100,
+      message: {
+        chat: { id: 101, type: "private" },
+        from: { id: 102 },
+        text: "https://x.com/poster/status/709",
+      },
+    },
+  });
+  assert.equal(response.status, 200);
+  assert.ok(
+    await db
+      .prepare("SELECT token FROM telegram_buttons WHERE candidate=?")
+      .bind("x:709")
+      .first(),
+  );
+  assert.ok(
+    await db
+      .prepare("SELECT payload FROM telegram_outbox WHERE update_id=100")
+      .first(),
+  );
+});

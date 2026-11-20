@@ -511,6 +511,7 @@ export async function inferLocal(
   model: string,
   request: typeof fetch = fetch,
 ) {
+  if (!e.text.trim()) throw Error("Target post has no text to infer from");
   const messages = modelMessages(e);
   let rejectedDraft = "",
     validationError = "";

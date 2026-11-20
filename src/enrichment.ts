@@ -216,7 +216,9 @@ export async function enrichmentBridge(request: Request, env: EnrichmentEnv) {
         p.modelStatus === "complete" ? "complete" : "partial",
         p.modelStatus === "complete"
           ? ""
-          : "Modelo local no disponible; extracción parcial",
+          : p.extraction.text.trim()
+            ? "Modelo local no disponible; extracción parcial"
+            : "Publicación sin texto; medios extraídos sin inventar metadatos editoriales",
         now,
         v.candidate,
         v.token,
