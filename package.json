@@ -12,6 +12,7 @@
     "db:local": "wrangler d1 migrations apply DB --local --config wrangler.local.jsonc",
     "seed:demo": "node scripts/seed-demo.mjs",
     "bot": "node --env-file=.env.telegram --import tsx src/telegram-runner.ts",
+    "enrich": "node --env-file=.env.telegram --import tsx src/enrichment-runner.ts",
     "bot:status": "node --env-file=.env.telegram --import tsx src/telegram-runner.ts --status"
   },
   "dependencies": {

@@ -1,3 +1,9 @@
+import {
+  proposalGuard,
+  enrichmentStatus,
+  missingPatch,
+  queueEnrichment,
+} from "./enrichment";
 import { source } from "./source";
 import type { Env } from "./auth";
 import { categories, dateValid } from "./model";
@@ -53,6 +59,14 @@ async function processUpdate(
   const buttons = async (c: ManualCandidate, selectionRevision: number) => {
     const row: { text: string; callback_data: string }[] = [];
     const position = keyboard.length / 2 + 1;
+    const proposalRevision =
+      c.provider === "x"
+        ? (await env.DB.prepare(
+            "SELECT created_at FROM enrichment_results WHERE candidate=?",
+          )
+            .bind(c.id)
+            .first<number>("created_at")) || 0
+        : 0;
     for (const [action, label] of [
       ["toggle", "Seleccionar/quitar"],
       ["category", "Categoría"],
@@ -60,7 +74,13 @@ async function processUpdate(
       ["discard", "Descartar"],
       ["up", "↑"],
       ["down", "↓"],
-      ["metadata", "Metadatos"],
+      ["metadata", "Propuesta / metadatos"],
+      ...(c.provider === "x"
+        ? [
+            ["analyze", "Analizar"],
+            ["apply-enrichment", "Aplicar vacíos"],
+          ]
+        : []),
     ]) {
       const token = crypto.randomUUID();
       writes.push(
@@ -76,6 +96,13 @@ async function processUpdate(
           Date.now() + 86400000,
         ),
       );
+      if (action === "apply-enrichment")
+        writes.push(
+          env.DB.prepare("INSERT INTO enrichment_buttons VALUES(?,?)").bind(
+            token,
+            proposalRevision,
+          ),
+        );
       row.push({ text: `${position} · ${label}`, callback_data: token });
     }
     keyboard.push(row.slice(0, 3), row.slice(3));
@@ -144,9 +171,60 @@ async function processUpdate(
             if (index >= 0) ids.splice(index, 1);
             patch.state = "discarded";
           } else if (button.action === "metadata") {
-            Object.assign(patch, await metadata(c));
-            for (const key of ["title", "streamer", "thumbnail"] as const)
-              if (c[key]) delete patch[key];
+            if (c.provider === "x") {
+              const result = await enrichmentStatus(env, c.id),
+                p = result.proposal;
+              text = `Análisis privado: ${(result.job as any)?.status || "sin iniciar"}.`;
+              if (p) {
+                const e = p.extraction,
+                  s = p.suggestion;
+                text += `\nAutor del post: ${e.author} ${e.handle} (no acredita al streamer).\nComentarios ${e.comments.length}/${e.commentsRequested}: ${e.commentsReason}\nOrientación detectada: ${p.orientation} ${e.width}×${e.height} (${e.dimensionSource}). Imagen: ${e.imageType} (poster no garantiza fotograma inicial).`;
+                if (s)
+                  text += `\nTítulo sugerido: ${s.title}\nStreamer: ${s.streamer || "desconocido"}\nContexto sugerido: ${s.text}\nCategoría sugerida: ${s.category}\nEvidencia de streamer: ${s.evidence.streamer || "no disponible"}`;
+                else
+                  text += e.text.trim()
+                    ? "\nModelo local no disponible; extracción parcial."
+                    : "\nPublicación sin texto: sólo se extraen medios, sin inventar metadatos editoriales.";
+              }
+              text +=
+                "\nAplicar vacíos requiere tu botón explícito. No publica ni aprueba revisión. Consulta imagen/evidencia en la bandeja web.";
+            } else {
+              Object.assign(patch, await metadata(c));
+              for (const key of ["title", "streamer", "thumbnail"] as const)
+                if (c[key]) delete patch[key];
+            }
+          } else if (button.action === "analyze" && c.provider === "x") {
+            writes.push(
+              queueEnrichment(env, c.id),
+              env.DB.prepare(
+                "UPDATE enrichment_jobs SET status='queued',attempts=0,token=NULL,lease_until=0,next_at=0,error='',updated_at=? WHERE candidate=? AND status!='running'",
+              ).bind(Date.now(), c.id),
+            );
+            text =
+              "Solicitud de análisis recibida; si ya está ejecutándose, continúa. Consulta Propuesta después. No publica.";
+          } else if (
+            button.action === "apply-enrichment" &&
+            c.provider === "x"
+          ) {
+            const result = await enrichmentStatus(env, c.id);
+            const version = await env.DB.prepare(
+              "SELECT proposal_revision FROM enrichment_buttons WHERE token=?",
+            )
+              .bind(token)
+              .first<number>("proposal_revision");
+            if (!result.proposal)
+              text =
+                "Todavía no hay una propuesta disponible. Consulta Propuesta después o analiza la fuente.";
+            else if (version !== result.created_at)
+              text =
+                "La propuesta cambió. Consulta Propuesta y usa los controles nuevos antes de aplicar.";
+            else {
+              Object.assign(patch, missingPatch(c, result.proposal));
+              writes.push(proposalGuard(env, c.id, version), clearGuard(env));
+              text = Object.keys(patch).length
+                ? "Propuesta aplicada sólo a campos vacíos. No aprueba ni publica una edición."
+                : "No hay campos vacíos que completar. No se ha cambiado ni publicado nada.";
+            }
           } else if (button.action === "category") {
             patch.category =
               categories[
@@ -296,7 +374,11 @@ async function processUpdate(
             const link = source(url);
             const c =
               (await getCandidate(env, link.id)) ||
-              ({ id: link.id, revision: 1 } as ManualCandidate);
+              ({
+                id: link.id,
+                provider: link.provider,
+                revision: 1,
+              } as ManualCandidate);
             text += `\n${keyboard.length / 2 + 1}. ${link.url}`;
             await buttons(c, selection.revision);
           } catch {
@@ -333,6 +415,9 @@ async function processUpdate(
     env.DB.prepare(
       "UPDATE telegram_receiver SET cursor=?,date=?,pending_candidate=?,pending_field=?,pending_revision=? WHERE singleton=1",
     ).bind(id + 1, date, pending, pendingField, pendingRevision),
+    env.DB.prepare(
+      "DELETE FROM enrichment_buttons WHERE token NOT IN (SELECT token FROM telegram_buttons WHERE expires_at>=?)",
+    ).bind(now),
     env.DB.prepare("DELETE FROM telegram_buttons WHERE expires_at<?").bind(now),
   ]);
   return { ok: true };
