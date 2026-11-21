@@ -280,12 +280,10 @@ export async function metadata(
   const url = new URL("https://www.youtube.com/oembed");
   url.searchParams.set("url", link.url);
   url.searchParams.set("format", "json");
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4000);
   try {
     const r = await fetch(url, {
       redirect: "manual",
-      signal: controller.signal,
+      signal: AbortSignal.timeout(4000),
     });
     if (!r.ok || !r.headers.get("Content-Type")?.includes("application/json")) {
       await r.body?.cancel();
@@ -317,8 +315,6 @@ export async function metadata(
     };
   } catch {
     return {};
-  } finally {
-    clearTimeout(timer);
   }
 }
 export async function inboxAction(env: Env, action: string, v: any) {

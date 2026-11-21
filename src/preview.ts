@@ -6,7 +6,7 @@ export const previewScript = `
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const desktop = matchMedia('(hover: hover) and (pointer: fine)');
   const wide = matchMedia('(min-width: 432px)');
-  let dismissed = null;
+  let dismissed = null, dismissedBox = null;
   let active = null, hoverTimer = null, hoverOwner = null, leaveTimer = null, closing = null, observedHero = false, fullscreenSession = false;
   const provider = el => el.dataset.provider || 'twitch';
   const name = el => provider(el) === 'youtube' ? 'YouTube' : provider(el) === 'x' ? 'X' : 'Twitch';
@@ -64,7 +64,14 @@ export const previewScript = `
       animation.finished.then(() => { layer.remove(); if (closing?.layer === layer) closing = null; }).catch(() => layer.remove());
     } else layer.remove();
   };
-  const dismiss = () => { dismissed = active?.el || dismissed; stop(); };
+  const dismiss = () => {
+    if (active?.el) {
+      // Keep the card and its expanded layer as the "stay closed" zone.
+      const a = active.el.getBoundingClientRect(), b = active.layer?.getBoundingClientRect() || a;
+      dismissedBox = {left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom)};
+    }
+    dismissed = active?.el || dismissed; stop();
+  };
   const queueHover = el => {
     if (dismissed || !autoAllowed()) return;
     clearHover(); hoverOwner = el;
@@ -208,7 +215,7 @@ export const previewScript = `
   };
   const start = (el, manual = false) => {
     clearTimers();
-    if (manual) dismissed=null;
+    if (manual) { dismissed=null; dismissedBox=null; }
     if (active?.el === el) return;
     if (document.hidden || !fits(el) || (!manual && (!autoAllowed() || provider(el) === 'x')) || !/^[A-Za-z0-9_-]{1,100}$/.test(el.dataset.preview)) return;
     stop({animate: false, restoreFocus: false}); discardClosing();
@@ -256,9 +263,9 @@ export const previewScript = `
   // Respect explicit dismissal until the pointer genuinely leaves its card.
   document.addEventListener('pointermove', event => {
     if (!dismissed || event.pointerType !== 'mouse' || (!event.movementX && !event.movementY)) return;
-    const box=dismissed.getBoundingClientRect();
+    const box=dismissedBox||dismissed.getBoundingClientRect();
     if(event.clientX>=box.left && event.clientX<=box.right && event.clientY>=box.top && event.clientY<=box.bottom)return;
-    dismissed=null;
+    dismissed=null; dismissedBox=null;
     const next=event.target instanceof Element ? event.target.closest('.catalog-card[data-preview]') : null;
     if(next)queueHover(next);
   }, {passive:true});
