@@ -401,6 +401,10 @@ test("immersive cards keep neighbours reachable and adapt to portrait playback",
     await page.keyboard.press("Escape");
     await expect(layer).toHaveCount(0);
     await expect(page.locator("iframe")).toHaveCount(0);
+    // Layout-induced pointerenter after removal must not reopen a dismissed card.
+    await portrait.dispatchEvent("pointerenter", { pointerType: "mouse" });
+    await page.waitForTimeout(700);
+    await expect(layer).toHaveCount(0);
     // Autoplay blocked: one delayed recovery action, removed once playing starts.
     await page.evaluate(() => {
       (window as any).holdPlayback = true;
@@ -420,6 +424,13 @@ test("immersive cards keep neighbours reachable and adapt to portrait playback",
     await expect(retry).toBeHidden();
     await expect(layer).toHaveAttribute("data-playback", "playing");
     await page.keyboard.press("Escape");
+    await expect(layer).toHaveCount(0);
+    await page.mouse.move(5, 5);
+    await landscape.hover();
+    await expect(layer).toHaveAttribute("data-playback", "playing");
+    await layer
+      .getByRole("button", { name: "Close preview", exact: true })
+      .click();
     await expect(layer).toHaveCount(0);
   } finally {
     await context.close();

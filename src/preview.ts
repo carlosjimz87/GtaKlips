@@ -6,6 +6,7 @@ export const previewScript = `
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const desktop = matchMedia('(hover: hover) and (pointer: fine)');
   const wide = matchMedia('(min-width: 432px)');
+  let dismissed = null;
   let active = null, hoverTimer = null, hoverOwner = null, leaveTimer = null, closing = null, observedHero = false, fullscreenSession = false;
   const provider = el => el.dataset.provider || 'twitch';
   const name = el => provider(el) === 'youtube' ? 'YouTube' : provider(el) === 'x' ? 'X' : 'Twitch';
@@ -62,6 +63,12 @@ export const previewScript = `
       closing = {layer, animation};
       animation.finished.then(() => { layer.remove(); if (closing?.layer === layer) closing = null; }).catch(() => layer.remove());
     } else layer.remove();
+  };
+  const dismiss = () => { dismissed = active?.el || dismissed; stop(); };
+  const queueHover = el => {
+    if (dismissed || !autoAllowed()) return;
+    clearHover(); hoverOwner = el;
+    hoverTimer = setTimeout(() => { hoverTimer = hoverOwner = null; start(el); }, 550);
   };
   // The player fades in over the already-visible cover so nothing jumps or flashes.
   const fadeIn = frame => {
@@ -193,7 +200,7 @@ export const previewScript = `
     if (height > innerHeight - top - 12) { layer.remove(); return null; }
     layer.style.left = Math.max(12, Math.min(anchor.left + (anchor.width - width) / 2, viewportWidth() - width - 12)) + 'px';
     layer.style.top = Math.max(top, Math.min(anchor.top + (anchor.height-height)/2, innerHeight - height - 12)) + 'px';
-    layer.querySelector('[data-preview-close]').addEventListener('click', () => stop());
+    layer.querySelector('[data-preview-close]').addEventListener('click', dismiss);
     layer.addEventListener('pointerenter', () => { if (active?.el === el) clearLeave(); });
     layer.addEventListener('pointerleave', event => handoff(event, el, layer));
     layer.addEventListener('focusout', event => focusHandoff(event, el, layer));
@@ -201,6 +208,7 @@ export const previewScript = `
   };
   const start = (el, manual = false) => {
     clearTimers();
+    if (manual) dismissed=null;
     if (active?.el === el) return;
     if (document.hidden || !fits(el) || (!manual && (!autoAllowed() || provider(el) === 'x')) || !/^[A-Za-z0-9_-]{1,100}$/.test(el.dataset.preview)) return;
     stop({animate: false, restoreFocus: false}); discardClosing();
@@ -232,19 +240,28 @@ export const previewScript = `
   for (const el of owners) {
     const stage=el.querySelector('.preview-stage'); if(stage)stage.dataset.provider=provider(el);
     el.querySelector('.preview-toolbar').hidden = false;
-    el.querySelector('[data-preview-toggle]').addEventListener('click', () => active?.el === el ? stop() : start(el, true));
+    el.querySelector('[data-preview-toggle]').addEventListener('click', () => active?.el === el ? dismiss() : start(el, true));
     if (el !== hero) {
       el.querySelector('[data-preview-toggle]').setAttribute('aria-expanded', 'false');
       el.addEventListener('pointerenter', event => {
         if (active?.el === el) clearLeave();
         if (event.pointerType !== 'mouse' || !autoAllowed()) return;
-        clearHover(); hoverOwner = el;
-        hoverTimer = setTimeout(() => { hoverTimer = hoverOwner = null; start(el); }, 550);
+        queueHover(el);
       });
       el.addEventListener('pointerleave', event => handoff(event, el, active?.el === el ? active.layer : null));
       el.addEventListener('focusout', event => focusHandoff(event, el, active?.el === el ? active.layer : null));
     }
   }
+  // Removing a layer can generate pointerenter without a physical mouse move.
+  // Respect explicit dismissal until the pointer genuinely leaves its card.
+  document.addEventListener('pointermove', event => {
+    if (!dismissed || event.pointerType !== 'mouse' || (!event.movementX && !event.movementY)) return;
+    const box=dismissed.getBoundingClientRect();
+    if(event.clientX>=box.left && event.clientX<=box.right && event.clientY>=box.top && event.clientY<=box.bottom)return;
+    dismissed=null;
+    const next=event.target instanceof Element ? event.target.closest('.catalog-card[data-preview]') : null;
+    if(next)queueHover(next);
+  }, {passive:true});
   const check = () => {
     if (document.fullscreenElement || fullscreenSession) return;
     if (active && (!fits(active.el) || (active.layer ? !ownerVisible(active.el) || (active.layer.dataset.phase === 'ready' && !visible(active.stage)) : !visible(active.stage)))) stop({animate: false});
@@ -264,7 +281,7 @@ export const previewScript = `
   });
   addEventListener('pagehide', () => { stop({animate: false, restoreFocus: false}); discardClosing(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) { stop({animate: false, restoreFocus: false}); discardClosing(); } });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') stop(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') dismiss(); });
   reduced.addEventListener('change', () => { if (reduced.matches) { stop({animate: false}); discardClosing(); } });
   navigator.connection?.addEventListener('change', () => { if (navigator.connection.saveData) stop({animate: false}); });
 })();
