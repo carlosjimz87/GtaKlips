@@ -6,6 +6,7 @@ export const previewScript = `
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const desktop = matchMedia('(hover: hover) and (pointer: fine)');
   const wide = matchMedia('(min-width: 432px)');
+  let dismissed = null, dismissedBox = null;
   let active = null, hoverTimer = null, hoverOwner = null, leaveTimer = null, closing = null, observedHero = false, fullscreenSession = false;
   const provider = el => el.dataset.provider || 'twitch';
   const name = el => provider(el) === 'youtube' ? 'YouTube' : provider(el) === 'x' ? 'X' : 'Twitch';
@@ -49,7 +50,7 @@ export const previewScript = `
     previous.animation?.cancel();
     previous.player?.destroy?.(); previous.mount?.remove();
     previous.stage.querySelectorAll('iframe').forEach(frame => frame.remove());
-    previous.playButton?.remove(); clearTimeout(previous.timeout);
+    previous.playButton?.remove(); clearTimeout(previous.timeout); clearTimeout(previous.playTimeout);
     mark(previous.el, false);
     previous.el.querySelector('.preview-status').textContent = 'Preview stopped.';
     if (!previous.layer) return;
@@ -62,6 +63,19 @@ export const previewScript = `
       closing = {layer, animation};
       animation.finished.then(() => { layer.remove(); if (closing?.layer === layer) closing = null; }).catch(() => layer.remove());
     } else layer.remove();
+  };
+  const dismiss = () => {
+    if (active?.el) {
+      // Keep the card and its expanded layer as the "stay closed" zone.
+      const a = active.el.getBoundingClientRect(), b = active.layer?.getBoundingClientRect() || a;
+      dismissedBox = {left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom)};
+    }
+    dismissed = active?.el || dismissed; stop();
+  };
+  const queueHover = el => {
+    if (dismissed || !autoAllowed()) return;
+    clearHover(); hoverOwner = el;
+    hoverTimer = setTimeout(() => { hoverTimer = hoverOwner = null; start(el); }, 550);
   };
   // The player fades in over the already-visible cover so nothing jumps or flashes.
   const fadeIn = frame => {
@@ -105,7 +119,7 @@ export const previewScript = `
     if (entry.layer) entry.layer.dataset.phase = 'ready';
     const status = entry.el.querySelector('.preview-status');
     status.textContent = 'Starts muted. ' + name(entry.el) + ' may ask for confirmation; if it does not start, open the original on ' + name(entry.el) + '.';
-    if (provider(entry.el) === 'twitch') { entry.stage.append(iframe(entry.el)); return; }
+    if (provider(entry.el) === 'twitch') { const frame=iframe(entry.el); frame.addEventListener('load',()=>{if(active===entry && entry.layer)entry.layer.dataset.playback='loaded';},{once:true}); entry.stage.append(frame); return; }
     const mount = document.createElement('div'); entry.mount = mount; entry.stage.append(mount);
     try {
       if (provider(entry.el) === 'youtube') {
@@ -115,10 +129,11 @@ export const previewScript = `
         const url = new URL('https://www.youtube.com/embed/' + entry.el.dataset.preview);
         for (const [key,value] of Object.entries({enablejsapi:'1',origin:location.origin,playsinline:'1',controls:'1',autoplay:'1',mute:'1'})) url.searchParams.set(key,value);
         frame.src=url.href; frame.title='YouTube · '+entry.el.dataset.previewTitle; frame.allow='autoplay; fullscreen'; frame.allowFullscreen=true; frame.referrerPolicy='strict-origin-when-cross-origin'; fadeIn(frame); mount.append(frame);
-        const button = document.createElement('button'); entry.playButton = button; button.type='button'; button.textContent='Reproducir en YouTube';
+        const button = document.createElement('button'); entry.playButton = button; button.type='button'; button.textContent='Play video'; button.hidden=true;
+        entry.playTimeout=setTimeout(()=>{if(active===entry && entry.layer?.dataset.playback!=='playing')button.hidden=false;},4000);
         (entry.layer?.querySelector('.layer-footer') || entry.el.querySelector('.preview-toolbar')).append(button);
         button.onclick=()=>entry.player?.playVideo();
-        entry.player=new window.YT.Player(frame,{events:{onReady:()=>{if(active!==entry)return;entry.player.mute();entry.player.playVideo();},onStateChange:event=>{if(active!==entry)return;if(event.data===1){button.hidden=true;status.textContent='Playing on YouTube. Controls are available on the video.';}},onError:()=>{if(active!==entry)return;status.textContent='YouTube unavailable. Open the original on YouTube.';button.hidden=false;}}});
+        entry.player=new window.YT.Player(frame,{events:{onReady:()=>{if(active!==entry)return;entry.player.mute();entry.player.playVideo();},onStateChange:event=>{if(active!==entry)return;if(event.data===1){button.hidden=true;clearTimeout(entry.playTimeout);if(entry.layer)entry.layer.dataset.playback='playing';status.textContent='Playing on YouTube. Controls are available on the video.';}else if(entry.layer && (event.data===2 || event.data===0)){entry.layer.dataset.playback='paused';}},onError:()=>{if(active!==entry)return;status.textContent='YouTube unavailable. Open the original on YouTube.';clearTimeout(entry.playTimeout);button.hidden=true;if(entry.layer)entry.layer.dataset.playback='error';}}});
       } else {
         status.textContent='Loading the full X post. No autoplay; open the original if it is unavailable.';
         await load('x','https://platform.twitter.com/widgets.js',()=>!!window.twttr?.widgets?.createTweet);
@@ -154,18 +169,27 @@ export const previewScript = `
     setTimeout(() => { if (active === expected && left(document.activeElement)) stop({restoreFocus: false}); }, 0);
   };
   const makeLayer = el => {
-    const width = Math.min(460, viewportWidth() - 24);
+    const anchor = el.getBoundingClientRect();
+    const orientation = el.dataset.orientation || 'auto';
+    const portrait = orientation === 'portrait';
+    // Never cover a whole neighbour: growth is bounded to 64px on either side.
+    // Twitch's official minimum is the only exception (still leaves a reachable strip).
+    const width = Math.min(viewportWidth() - 24, Math.max(provider(el)==='twitch'?402:222,
+      portrait ? Math.min(340,anchor.width+24) : Math.min(520,anchor.width+128)));
+    const available = innerHeight - headerBottom() - 24;
+    const height = Math.min(available, portrait ? Math.min(560,anchor.height+120) :
+      provider(el)==='x' ? Math.min(480,anchor.height+64) : orientation==='square' ? width : Math.max(provider(el)==='twitch'?302:242,width*9/16+2));
+    if(height < (provider(el)==='twitch'?302:242))return null;
     if (width < (provider(el) === 'twitch' ? 402 : 222) || !ownerVisible(el)) return null;
     const layer = document.createElement('section');
     layer.className = 'card-preview-layer'; layer.id = 'clip-preview-layer';
     layer.dataset.previewOwner = el.id; layer.dataset.phase = 'opening';
     layer.setAttribute('role', 'region');
     layer.setAttribute('aria-label', 'Preview of ' + el.dataset.previewTitle);
-    layer.innerHTML = '<div class="layer-heading"><div><p class="eyebrow">PREVIEW</p><h2></h2><p class="layer-creator"></p></div><button type="button" data-preview-close>Close preview</button></div><div class="preview-stage"><span class="preview-placeholder">Preview · Twitch</span></div><div class="layer-footer"><a class="button primary" target="_blank" rel="noopener noreferrer">Watch on Twitch</a><p>Starts muted. Twitch may ask for confirmation.</p></div>';
-    layer.dataset.provider = provider(el);
-    layer.querySelector('.preview-placeholder').textContent = 'Preview · ' + name(el);
-    layer.querySelector('a').textContent = 'Watch on ' + name(el);
-    layer.querySelector('.layer-footer p').textContent = provider(el) === 'x' ? 'Full post; start the video from X.' : 'Starts muted. The provider may ask for confirmation.';
+    layer.innerHTML = '<div class="preview-stage"><span class="preview-placeholder">Loading video…</span></div><div class="layer-heading"><div><h2></h2><p class="layer-creator"></p></div></div><button type="button" data-preview-close aria-label="Close preview">×</button><div class="layer-footer"><a target="_blank" rel="noopener noreferrer"></a></div>';
+    layer.dataset.provider = provider(el); layer.dataset.orientation = orientation;
+    layer.dataset.playback = 'loading';
+    layer.querySelector('a').textContent = 'Open on ' + name(el) + ' ↗';
     layer.querySelector('h2').textContent = el.dataset.previewTitle;
     layer.querySelector('.layer-creator').textContent = (el.querySelector('.creator strong')?.textContent || '') + ' · ' + name(el);
     layer.querySelector('a').href = el.dataset.sourceUrl || 'https://clips.twitch.tv/' + el.dataset.preview;
@@ -177,14 +201,13 @@ export const previewScript = `
       cover.addEventListener('error', () => { cover.hidden = true; });
       stage.prepend(cover);
     }
-    layer.style.width = width + 'px'; layer.style.top = (headerBottom() + 12) + 'px';
+    layer.style.width = width + 'px'; layer.style.height=height+'px'; layer.style.top = (headerBottom() + 12) + 'px';
     el.after(layer);
-    const height = layer.getBoundingClientRect().height, top = headerBottom() + 12;
+    const top = headerBottom() + 12;
     if (height > innerHeight - top - 12) { layer.remove(); return null; }
-    const anchor = el.querySelector('.poster').getBoundingClientRect();
     layer.style.left = Math.max(12, Math.min(anchor.left + (anchor.width - width) / 2, viewportWidth() - width - 12)) + 'px';
-    layer.style.top = Math.max(top, Math.min(anchor.top - 8, innerHeight - height - 12)) + 'px';
-    layer.querySelector('[data-preview-close]').addEventListener('click', () => stop());
+    layer.style.top = Math.max(top, Math.min(anchor.top + (anchor.height-height)/2, innerHeight - height - 12)) + 'px';
+    layer.querySelector('[data-preview-close]').addEventListener('click', dismiss);
     layer.addEventListener('pointerenter', () => { if (active?.el === el) clearLeave(); });
     layer.addEventListener('pointerleave', event => handoff(event, el, layer));
     layer.addEventListener('focusout', event => focusHandoff(event, el, layer));
@@ -192,6 +215,7 @@ export const previewScript = `
   };
   const start = (el, manual = false) => {
     clearTimers();
+    if (manual) { dismissed=null; dismissedBox=null; }
     if (active?.el === el) return;
     if (document.hidden || !fits(el) || (!manual && (!autoAllowed() || provider(el) === 'x')) || !/^[A-Za-z0-9_-]{1,100}$/.test(el.dataset.preview)) return;
     stop({animate: false, restoreFocus: false}); discardClosing();
@@ -223,19 +247,28 @@ export const previewScript = `
   for (const el of owners) {
     const stage=el.querySelector('.preview-stage'); if(stage)stage.dataset.provider=provider(el);
     el.querySelector('.preview-toolbar').hidden = false;
-    el.querySelector('[data-preview-toggle]').addEventListener('click', () => active?.el === el ? stop() : start(el, true));
+    el.querySelector('[data-preview-toggle]').addEventListener('click', () => active?.el === el ? dismiss() : start(el, true));
     if (el !== hero) {
       el.querySelector('[data-preview-toggle]').setAttribute('aria-expanded', 'false');
       el.addEventListener('pointerenter', event => {
         if (active?.el === el) clearLeave();
         if (event.pointerType !== 'mouse' || !autoAllowed()) return;
-        clearHover(); hoverOwner = el;
-        hoverTimer = setTimeout(() => { hoverTimer = hoverOwner = null; start(el); }, 550);
+        queueHover(el);
       });
       el.addEventListener('pointerleave', event => handoff(event, el, active?.el === el ? active.layer : null));
       el.addEventListener('focusout', event => focusHandoff(event, el, active?.el === el ? active.layer : null));
     }
   }
+  // Removing a layer can generate pointerenter without a physical mouse move.
+  // Respect explicit dismissal until the pointer genuinely leaves its card.
+  document.addEventListener('pointermove', event => {
+    if (!dismissed || event.pointerType !== 'mouse' || (!event.movementX && !event.movementY)) return;
+    const box=dismissedBox||dismissed.getBoundingClientRect();
+    if(event.clientX>=box.left && event.clientX<=box.right && event.clientY>=box.top && event.clientY<=box.bottom)return;
+    dismissed=null; dismissedBox=null;
+    const next=event.target instanceof Element ? event.target.closest('.catalog-card[data-preview]') : null;
+    if(next)queueHover(next);
+  }, {passive:true});
   const check = () => {
     if (document.fullscreenElement || fullscreenSession) return;
     if (active && (!fits(active.el) || (active.layer ? !ownerVisible(active.el) || (active.layer.dataset.phase === 'ready' && !visible(active.stage)) : !visible(active.stage)))) stop({animate: false});
@@ -255,7 +288,7 @@ export const previewScript = `
   });
   addEventListener('pagehide', () => { stop({animate: false, restoreFocus: false}); discardClosing(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) { stop({animate: false, restoreFocus: false}); discardClosing(); } });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') stop(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') dismiss(); });
   reduced.addEventListener('change', () => { if (reduced.matches) { stop({animate: false}); discardClosing(); } });
   navigator.connection?.addEventListener('change', () => { if (navigator.connection.saveData) stop({animate: false}); });
 })();

@@ -297,3 +297,142 @@ test("shared X mobile URL can be captured, selected, prepared and loaded into ed
   );
   expect((await request.get("/dia/" + date)).status()).toBe(404);
 });
+
+test("immersive cards keep neighbours reachable and adapt to portrait playback", async ({
+  browser,
+  request,
+}) => {
+  await seed(request, "2094-05-01");
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 1100 },
+    hasTouch: false,
+    reducedMotion: "no-preference",
+  });
+  await context.route("https://www.youtube.com/iframe_api", (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      body: `window.YT={Player:class {constructor(frame,options){this.frame=frame;this.options=options;window.fixturePlayer=this;setTimeout(()=>options.events.onReady(),0);}mute(){}playVideo(){if(!window.holdPlayback)this.options.events.onStateChange({data:1});}destroy(){this.frame.remove();}}};window.onYouTubeIframeAPIReady();`,
+    }),
+  );
+  await context.route("https://www.youtube.com/embed/**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: '<html style="height:100%;background:linear-gradient(140deg,#243947,#8e625a);color:white"><body>Official player fixture</body></html>',
+    }),
+  );
+  await context.route("https://clips.twitch.tv/embed**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "Twitch fixture" }),
+  );
+  const page = await context.newPage();
+  try {
+    await page.goto("/dia/2094-05-01#seleccion");
+    const cards = page.locator(".catalog-card");
+    const landscape = page.locator('[id="clip-youtube:abcdefghijk"]');
+    const portrait = page.locator('[id="clip-youtube:abcdefghijl"]');
+    await landscape.scrollIntoViewIfNeeded();
+    const before = await landscape.boundingBox();
+    const poster = await landscape.locator(".poster").boundingBox();
+    expect(poster!.height).toBeGreaterThan(before!.height - 4);
+    const sizes = await cards.evaluateAll((nodes) =>
+      nodes.map((n) => {
+        const r = n.getBoundingClientRect();
+        return [r.x, r.y, r.width, r.height];
+      }),
+    );
+    await page.screenshot({
+      path: test.info().outputPath("immersive-rest.png"),
+    });
+    await landscape.hover();
+    const layer = page.locator(".card-preview-layer");
+    await expect(layer).toHaveAttribute("data-playback", "playing");
+    await expect(layer.locator(".layer-heading")).toHaveCSS("opacity", "0");
+    await expect(layer.getByRole("link")).toHaveCount(1);
+    await expect(
+      layer.getByRole("button", { name: "Play video" }),
+    ).toBeHidden();
+    await page.evaluate(() =>
+      (window as any).fixturePlayer.options.events.onStateChange({ data: 2 }),
+    );
+    await expect(layer.locator(".layer-heading")).toHaveCSS("opacity", "1");
+    await page.evaluate(() => (window as any).fixturePlayer.playVideo());
+    await expect(layer.locator(".layer-heading")).toHaveCSS("opacity", "0");
+    const wide = (await layer.boundingBox())!;
+    expect(wide.width).toBeGreaterThan(before!.width);
+    expect(wide.width).toBeLessThanOrEqual(before!.width + 130);
+    expect(
+      await cards.evaluateAll((nodes) =>
+        nodes.map((n) => {
+          const r = n.getBoundingClientRect();
+          return [r.x, r.y, r.width, r.height];
+        }),
+      ),
+    ).toEqual(sizes);
+    const frame = await layer.locator("iframe").boundingBox();
+    expect(frame!.width).toBeGreaterThan(wide.width - 4);
+    await page.screenshot({
+      path: test.info().outputPath("immersive-landscape.png"),
+    });
+    const next = (await portrait.boundingBox())!;
+    // A real pointer can reach the adjacent card without closing a modal first.
+    const x = next.x + next.width - 24,
+      y = next.y + next.height / 2;
+    expect(
+      await page.evaluate(
+        ({ x, y }) =>
+          document.elementFromPoint(x, y)?.closest(".catalog-card")?.id,
+        { x, y },
+      ),
+    ).toBe("clip-youtube:abcdefghijl");
+    await page.mouse.move(x, y);
+    await expect(layer).toHaveAttribute(
+      "data-preview-owner",
+      "clip-youtube:abcdefghijl",
+    );
+    await expect(layer).toHaveAttribute("data-playback", "playing");
+    const tall = (await layer.boundingBox())!;
+    expect(tall.height).toBeGreaterThan(next.height);
+    expect(tall.height).toBeGreaterThan(tall.width);
+    expect(tall.height).toBeLessThanOrEqual(next.height + 120);
+    expect(tall.y).toBeGreaterThanOrEqual(0);
+    expect(tall.y + tall.height).toBeLessThanOrEqual(1100);
+    await page.screenshot({
+      path: test.info().outputPath("immersive-portrait.png"),
+    });
+    await page.keyboard.press("Escape");
+    await expect(layer).toHaveCount(0);
+    await expect(page.locator("iframe")).toHaveCount(0);
+    // Layout-induced pointerenter after removal must not reopen a dismissed card.
+    await portrait.dispatchEvent("pointerenter", { pointerType: "mouse" });
+    await page.waitForTimeout(700);
+    await expect(layer).toHaveCount(0);
+    // Autoplay blocked: one delayed recovery action, removed once playing starts.
+    await page.evaluate(() => {
+      (window as any).holdPlayback = true;
+    });
+    await landscape.locator("[data-preview-toggle]").dispatchEvent("click");
+    const retry = layer.getByRole("button", {
+      name: "Play video",
+      exact: true,
+    });
+    await expect(layer).toHaveAttribute("data-phase", "ready");
+    await expect(retry).toBeHidden();
+    await expect(retry).toBeVisible({ timeout: 6000 });
+    await page.evaluate(() => {
+      (window as any).holdPlayback = false;
+    });
+    await retry.click();
+    await expect(retry).toBeHidden();
+    await expect(layer).toHaveAttribute("data-playback", "playing");
+    await page.keyboard.press("Escape");
+    await expect(layer).toHaveCount(0);
+    await page.mouse.move(5, 5);
+    await landscape.hover();
+    await expect(layer).toHaveAttribute("data-playback", "playing");
+    await layer
+      .getByRole("button", { name: "Close preview", exact: true })
+      .click();
+    await expect(layer).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
