@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { wakeEnrichment } from "./enrichment-wake";
 import { ownerUpdate, retryDelay, minimalUpdate } from "./telegram";
 export interface RunnerConfig {
   token: string;
@@ -147,6 +148,7 @@ export function createRunner(
               ? minimalUpdate(update)
               : { update_id: update.update_id },
           });
+          if (ownerUpdate(update, config)) wakeEnrichment();
           // Dismiss the Telegram spinner only after its effects are durable.
           // An expired/transient acknowledgement must never undo the update.
           if (

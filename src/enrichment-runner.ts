@@ -687,14 +687,17 @@ export function createEnrichmentRunner(
     },
   };
 }
+import { idle, nextDelay } from "./enrichment-wake";
 export async function enrichmentLoop(
   config: EnrichmentConfig,
   stopped: () => boolean,
 ) {
   const runner = createEnrichmentRunner(config);
+  let idleCycles = 0;
   while (!stopped()) {
-    await runner.cycle().catch(() => {});
-    if (!stopped()) await new Promise((resolve) => setTimeout(resolve, 2000));
+    const worked = await runner.cycle().catch(() => false);
+    idleCycles = worked ? 0 : idleCycles + 1;
+    if (!stopped()) await idle(worked ? 0 : nextDelay(idleCycles));
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
