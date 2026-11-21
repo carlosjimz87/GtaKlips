@@ -58,10 +58,16 @@ export const previewScript = `
     layer.setAttribute('aria-hidden', 'true'); layer.inert = true;
     if (animate && !reduced.matches && !document.hidden && layer.dataset.phase === 'ready') {
       layer.dataset.phase = 'closing';
-      const animation = layer.animate([{opacity: 1}, {opacity: 0}], {duration: 140, easing: 'ease-out'});
+      const animation = layer.animate([{opacity: 1}, {opacity: 0}], {duration: 220, easing: 'ease-out'});
       closing = {layer, animation};
       animation.finished.then(() => { layer.remove(); if (closing?.layer === layer) closing = null; }).catch(() => layer.remove());
     } else layer.remove();
+  };
+  // The player fades in over the already-visible cover so nothing jumps or flashes.
+  const fadeIn = frame => {
+    frame.classList.add('fade-in');
+    frame.addEventListener('load', () => requestAnimationFrame(() => frame.classList.add('is-ready')), {once: true});
+    setTimeout(() => frame.classList.add('is-ready'), 2500);
   };
   const iframe = el => {
     const url = new URL('https://clips.twitch.tv/embed');
@@ -72,6 +78,7 @@ export const previewScript = `
     frame.src = url.href; frame.title = 'Preview of ' + el.dataset.previewTitle;
     frame.allow = 'autoplay; fullscreen'; frame.allowFullscreen = true;
     frame.referrerPolicy = 'strict-origin-when-cross-origin';
+    fadeIn(frame);
     return frame;
   };
   const scripts = new Map();
@@ -107,7 +114,7 @@ export const previewScript = `
         const frame = document.createElement('iframe');
         const url = new URL('https://www.youtube.com/embed/' + entry.el.dataset.preview);
         for (const [key,value] of Object.entries({enablejsapi:'1',origin:location.origin,playsinline:'1',controls:'1',autoplay:'1',mute:'1'})) url.searchParams.set(key,value);
-        frame.src=url.href; frame.title='YouTube · '+entry.el.dataset.previewTitle; frame.allow='autoplay; fullscreen'; frame.allowFullscreen=true; frame.referrerPolicy='strict-origin-when-cross-origin'; mount.append(frame);
+        frame.src=url.href; frame.title='YouTube · '+entry.el.dataset.previewTitle; frame.allow='autoplay; fullscreen'; frame.allowFullscreen=true; frame.referrerPolicy='strict-origin-when-cross-origin'; fadeIn(frame); mount.append(frame);
         const button = document.createElement('button'); entry.playButton = button; button.type='button'; button.textContent='Reproducir en YouTube';
         (entry.layer?.querySelector('.layer-footer') || entry.el.querySelector('.preview-toolbar')).append(button);
         button.onclick=()=>entry.player?.playVideo();
@@ -208,8 +215,9 @@ export const previewScript = `
     const dy = anchor.top + anchor.height / 2 - box.top - box.height / 2;
     entry.animation = layer.animate([
       {opacity: 0, transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + anchor.width / box.width + ',' + anchor.height / box.height + ')'},
+      {opacity: 1, offset: .55},
       {opacity: 1, transform: 'translate(0px,0px) scale(1,1)'}
-    ], {duration: 240, easing: 'cubic-bezier(.2,.8,.2,1)'});
+    ], {duration: 360, easing: 'cubic-bezier(.22,.7,.2,1)'});
     entry.animation.finished.then(() => finish(entry)).catch(() => {});
   };
   for (const el of owners) {
@@ -239,7 +247,7 @@ export const previewScript = `
     }
   }, {threshold: [0, .5, 1]});
   for (const el of owners) observer.observe(el);
-  addEventListener('scroll', event => { if (active && provider(active.el) === 'x' && inside(active.stage,event.target)) return; if (document.fullscreenElement || fullscreenSession) return; clearTimers(); if (active?.layer) stop({animate: false}); else check(); }, {passive: true, capture: true});
+  addEventListener('scroll', event => { if (event.target?.dataset?.autoScroll) return; if (active && provider(active.el) === 'x' && inside(active.stage,event.target)) return; if (document.fullscreenElement || fullscreenSession) return; clearTimers(); if (active?.layer) stop({animate: false}); else check(); }, {passive: true, capture: true});
   addEventListener('resize', () => { if (document.fullscreenElement || fullscreenSession) return; clearTimers(); if (active?.layer) stop({animate: false}); else check(); });
   document.addEventListener('fullscreenchange', () => {
     if (document.fullscreenElement) { fullscreenSession = true; clearTimers(); }
