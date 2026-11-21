@@ -145,3 +145,43 @@ test("a failed API call is recorded and can be retried", async () => {
   assert.equal(((await xPublish(env, v, O)) as any).mode, "published");
   mock.restoreAll();
 });
+
+test("drafts: a chosen clip replaces the featured one", async () => {
+  const two = {
+    ...edition,
+    date: "2026-11-22",
+    clips: [
+      ...edition.clips,
+      { ...edition.clips[0], id: "c2", title: "Otra jugada" },
+    ],
+  };
+  await db
+    .prepare(
+      "INSERT INTO editions(date,draft,published,revision) VALUES(?,?,?,1)",
+    )
+    .bind(two.date, "{}", JSON.stringify(two))
+    .run();
+  const r = await xDrafts({ DB: db, PUBLIC_ORIGIN: O }, two.date, O, "c2");
+  const top = r.drafts.find((d) => d.kind === "top");
+  assert.equal(top?.ref, "2026-11-22:c2");
+  assert.match(top!.text, /Otra jugada/);
+});
+
+test("publish rejects an empty or over-long text override", async () => {
+  const env = { DB: db, PUBLIC_ORIGIN: O } as Env;
+  for (const text of ["  ", "x".repeat(400)])
+    await assert.rejects(
+      xPublish(
+        env,
+        {
+          date: edition.date,
+          kind: "top",
+          ref: "2026-11-20:c1",
+          text,
+          confirm: true,
+        },
+        O,
+      ),
+      /Texto de X/,
+    );
+});

@@ -3,13 +3,20 @@ import { dateValid, type Edition } from "./model";
 import {
   creatorHuntDraft,
   publish,
+  weightedLength,
+  X_LIMIT,
   topDraft,
   type XDraft,
   type XKind,
 } from "./x-social";
 
 /** Drafts for a date: top (published featured clip) + creator hunts (pending candidates with no creator). */
-export async function xDrafts(env: Env, date: string, origin: string) {
+export async function xDrafts(
+  env: Env,
+  date: string,
+  origin: string,
+  clipId = "",
+) {
   if (!dateValid(date)) throw Error("Fecha no válida");
   const drafts: XDraft[] = [];
   const row = await env.DB.prepare(
@@ -19,7 +26,10 @@ export async function xDrafts(env: Env, date: string, origin: string) {
     .first<{ published: string | null }>();
   if (row?.published) {
     const e: Edition = JSON.parse(row.published);
-    const clip = e.clips.find((c) => c.id === e.featured) || e.clips[0];
+    const clip =
+      e.clips.find((c) => c.id === clipId) ||
+      e.clips.find((c) => c.id === e.featured) ||
+      e.clips[0];
     if (clip) drafts.push(topDraft(e, clip, origin));
   }
   const hunts = await env.DB.prepare(
@@ -48,13 +58,38 @@ export async function xDrafts(env: Env, date: string, origin: string) {
 /** Publishes one draft. Requires confirm:true; the stored draft is recomputed server-side. */
 export async function xPublish(
   env: Env,
-  v: { date?: string; kind?: XKind; ref?: string; confirm?: boolean },
+  v: {
+    date?: string;
+    kind?: XKind;
+    ref?: string;
+    clip?: string;
+    text?: string;
+    confirm?: boolean;
+  },
   origin: string,
 ) {
   if (v.confirm !== true) throw Error("Falta confirmación explícita");
-  const { drafts } = await xDrafts(env, String(v.date), origin);
-  const draft = drafts.find((d) => d.kind === v.kind && d.ref === v.ref);
-  if (!draft) throw Error("Borrador no encontrado");
+  const { drafts } = await xDrafts(
+    env,
+    String(v.date),
+    origin,
+    typeof v.clip === "string" ? v.clip : "",
+  );
+  const found = drafts.find((d) => d.kind === v.kind && d.ref === v.ref);
+  if (!found) throw Error("Borrador no encontrado");
+  // The owner may rewrite the main text; the reply/link stays server-built.
+  if (v.text !== undefined) {
+    if (
+      typeof v.text !== "string" ||
+      !v.text.trim() ||
+      weightedLength(v.text) > X_LIMIT
+    )
+      throw Error("Texto de X vacío o demasiado largo");
+  }
+  const draft = {
+    ...found,
+    text: v.text === undefined ? found.text : v.text.trim(),
+  };
   if (draft.state !== "draft" && draft.state !== "failed")
     throw Error("Ya publicado o en curso");
   if (env.X_PUBLISH_ENABLED !== "true" || !env.X_ACCESS_TOKEN)

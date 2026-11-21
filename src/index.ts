@@ -17,6 +17,7 @@ import { css } from "./style";
 import { xDrafts, xPublish } from "./x-admin";
 import { brandHead, brandMark, brandResponse } from "./brand";
 import { adminScript, editor } from "./admin";
+import { quickData, quickPage, quickScript } from "./quick-publish";
 interface Row {
   date: string;
   revision: number;
@@ -254,7 +255,14 @@ async function route(
     if (/^\/admin\/enrichment-assets\/[a-f0-9]{64}\.jpg$/.test(path))
       return enrichmentAsset(env, path.split("/").at(-1)!.slice(0, -4), true);
     if (path === "/admin/x/drafts")
-      return json(await xDrafts(env, url.searchParams.get("date") || "", base));
+      return json(
+        await xDrafts(
+          env,
+          url.searchParams.get("date") || "",
+          base,
+          url.searchParams.get("clip") || "",
+        ),
+      );
     if (path === "/admin/inbox/enrichment")
       return json(
         await enrichmentStatus(env, url.searchParams.get("id") || ""),
@@ -354,6 +362,14 @@ async function route(
         ? json(candidate)
         : json({ error: "Candidato no encontrado" }, 404);
     }
+    if (path === "/admin/quick")
+      return page("Publicar", quickPage(), base + path, undefined, true);
+    if (path === "/admin/quick.js")
+      return new Response(quickScript, {
+        headers: { "Content-Type": "text/javascript; charset=utf-8" },
+      });
+    if (path === "/admin/quick/data")
+      return json(await quickData(env, url.searchParams.get("date") || ""));
     if (path === "/admin/editor.js")
       return new Response(adminScript, {
         headers: { "Content-Type": "text/javascript; charset=utf-8" },
