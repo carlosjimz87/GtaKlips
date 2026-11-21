@@ -234,3 +234,9 @@ Aplica las migraciones locales (`npm run db:local`) antes de usar esta versión 
 `/seleccion` muestra los controles actuales; `/edicion YYYY-MM-DD` elige fecha y `/cancelar` cancela una entrada de texto. Admin permite orden, destacado, textos de edición y retirada, además de la edición detallada de cada fuente. El bot no observa el portapapeles: es necesario enviar el enlace. No ofrece localhost como enlace móvil funcional.
 
 El descubrimiento Twitch alimenta el mismo procesamiento, pero no cambia automáticamente la selección del propietario. Ninguna captura, propuesta o tarea programada publica contenido. «Completo» describe campos válidos, no autoría ni hechos verificados: la revisión explícita sigue siendo necesaria. Publicar en una instalación local no despliega la web en Internet ni publica en redes sociales.
+
+### Formulario rápido y análisis en segundo plano
+
+`/admin/quick` comprueba cada cinco segundos el estado del enriquecimiento mientras la pestaña está visible. «Incorporar datos nuevos» actualiza los campos editoriales que hayan cambiado en la fuente desde la apertura y que el usuario no haya editado (incluso si los dejó vacíos). No añade clips ni recupera los quitados automáticamente. Los cambios siguen en el formulario hasta publicar: esto no es autoguardado ni sincronización de vuelta a la bandeja.
+
+Antes de publicar se consulta de nuevo el estado: los datos nuevos incorporables requieren revisión; un análisis pendiente permite confirmar expresamente publicar la copia actual. El enriquecimiento no modifica posteriormente esa publicación. Los cambios concurrentes de la edición conservan el control de versión existente. Si la comprobación falla, se conservan los campos y no se publica. La comprobación periódica termina tras publicar o salir de la página.
