@@ -89,3 +89,14 @@ test("publish posts main tweet then self-reply; reply failure keeps main id", as
   assert.deepEqual(r, { mode: "published", tweetId: "111" });
   assert.equal(bodies[1].reply.in_reply_to_tweet_id, "111");
 });
+
+test("X-sourced clip ends with the status URL (quote render) and fits the limit", () => {
+  const url = "https://x.com/someone/status/1234567890";
+  const d = topDraft(
+    e,
+    { ...clip, provider: "x", url, text: "x".repeat(600) },
+    "https://g.example",
+  );
+  assert.ok(d.text.endsWith(`\n${url}`));
+  assert.ok(weightedLength(d.text) <= 280);
+});

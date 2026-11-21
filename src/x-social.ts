@@ -34,17 +34,26 @@ const handle = (s: string) => (/^[A-Za-z0-9_]{1,15}$/.test(s) ? `@${s}` : s);
 
 /** Top clip: credits the creator, shows the source (card/embed), site link in reply. */
 export function topDraft(e: Edition, clip: Clip, origin: string): XDraft {
-  const lines = [
+  const head = [
     `🔥 ${clip.title}`,
     `🎥 ${clip.streamer ? handle(clip.streamer) : credit(clip)}`,
     clip.text,
-    `▶ ${clip.url}`,
-    "#GTAVI",
-  ].filter(Boolean);
+  ];
+  // A trailing x.com status URL is rendered by X as the quoted post, so the
+  // original video plays inline in the timeline (no re-upload). Keep it last
+  // and make sure trimming never drops it.
+  const lines =
+    clip.provider === "x"
+      ? [...head, "#GTAVI"].filter(Boolean)
+      : [...head, `▶ ${clip.url}`, "#GTAVI"].filter(Boolean);
+  const text =
+    clip.provider === "x"
+      ? `${fit(lines, X_LIMIT - 24)}\n${clip.url}`
+      : fit(lines);
   return {
     kind: "top",
     ref: `${e.date}:${clip.id}`,
-    text: fit(lines),
+    text,
     replyText: `More moments of the day on GtaKlips 👇\n${origin}/dia/${e.date}?${utm("top", "x_top")}#clip-${clip.id}`,
   };
 }
