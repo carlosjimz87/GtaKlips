@@ -51,3 +51,15 @@ CI uploads Playwright reports as usual. Re-run with `npm run test:e2e`.
 
 Check actual posters and legibility, X click-to-load, Twitch/YouTube preview, keyboard,
 and touch on a real mobile device. Review with authentic content before public deployment.
+
+## Immersive-card follow-up
+
+Adds full-bleed resting cards, gradient/blur text, bounded orientation-aware preview,
+minimal overlay controls and YouTube playback-state text transitions. A browser regression
+checks full-surface posters, stable card geometry, landscape/portrait dimensions, a real
+mouse handoff to the visible neighbouring card and single-player cancellation. Provider
+APIs are mocked in these tests; real provider loading, letterboxing and imagery remain
+manual QA, not inferred from synthetic screenshots. Prior Lighthouse results above apply
+to the earlier design revision, not this follow-up.
+
+Follow-up verification: BUILD PASS; UNIT/INTEGRATION PASS (99); STATIC PASS; E2E PASS (29); REVIEW PASS (self-review and screenshot inspection). Live-provider MANUAL_QA remains pending.

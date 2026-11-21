@@ -97,4 +97,48 @@ export const designCss = `
   .public-page header nav { width: 100%; justify-content: space-between; }
   #seleccion,#buscar { scroll-margin-top: 144px; }
 }
+
+/* Immersive cards: poster and editorial copy share one full-bleed surface. */
+.public-page .catalog-card { position: relative; height: var(--card-h); isolation: isolate; }
+.public-page .catalog-card.previewing { background: transparent; border-color: transparent; box-shadow: none; }
+.catalog-card.previewing .clip-link { opacity: 0; }
+.catalog-card .clip-link { position: relative; display: block; height: 100%; }
+.catalog-card .poster { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; }
+.catalog-card .poster img { width: 100%; height: 100%; object-fit: cover; }
+.catalog-card .poster::after { background: none; }
+.catalog-card .duration { top: 14px; bottom: auto; right: 14px; background: #080c13b3; border-radius: 6px; padding: 4px 7px; }
+.catalog-card .play-disc { display: none; }
+.catalog-card .clip-info { position: absolute; inset: auto 0 0; z-index: 2; padding: 54px 16px 18px; background: linear-gradient(transparent,#080c13b8 32%,#080c13ee); }
+.catalog-card .clip-info::before,.layer-heading::before { content: ''; position: absolute; inset: 0; z-index: -1; backdrop-filter: blur(7px); mask-image: linear-gradient(transparent,#000 50%); pointer-events: none; }
+.catalog-card .card-heading { border: 0; margin-bottom: 8px; padding: 0; }
+.catalog-card .card-rank { font-size: 14px; color: #d7dfed; }
+.catalog-card .card-rank small { display: none; }
+.catalog-card .creator { margin-bottom: 8px; }
+.catalog-card .clip-info h2 { font-size: 19px; letter-spacing: -.025em; }
+.catalog-card .clip-caption { color: #c1cad7; }
+.public-page .catalog-card .source { padding-top: 10px; font-size: 11px; }
+.catalog-card[data-provider=x] .preview-toolbar { position: absolute; top: 8px; left: 8px; width: auto; height: auto; margin: 0; clip-path: none; overflow: visible; z-index: 4; }
+@media (hover:none) {
+ .public-page .catalog-card { height: var(--card-h); }
+ .catalog-card .preview-toolbar,.catalog-card .preview-toolbar:focus-within { position: absolute; top: 8px; left: 8px; width: auto; height: auto; padding: 0; background: transparent; z-index: 4; border: 0; }
+}
+/* The growing surface is anchored to the card; the rail keeps stable geometry. */
+.public-page .card-preview-layer { border-radius: 16px; border-color: #ffffff45; background: #080c13; box-shadow: 0 12px 38px #0009; }
+.public-page .card-preview-layer .preview-stage { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; }
+.public-page .card-preview-layer .preview-stage[data-provider=youtube] iframe { width: 100%; height: 100%; left: 0; transform: none; }
+.card-preview-layer .preview-stage > img { object-fit: cover; }
+.card-preview-layer .layer-heading { position: absolute; inset: auto 0 0; z-index: 2; display: block; padding: 44px 16px 20px; background: linear-gradient(transparent,#080c13dc); pointer-events: none; transition: opacity .35s ease; }
+.card-preview-layer .layer-heading h2 { font-size: 18px; margin-bottom: 6px; }
+.card-preview-layer .layer-creator { color: #dae3f2; font-size: 12px; }
+.public-page .card-preview-layer [data-preview-close] { position: absolute; z-index: 3; top: 8px; right: 8px; width: 44px; height: 44px; padding: 0; border: 1px solid #ffffff40; border-radius: 50%; background: #080c13b8; color: #fff; font-size: 26px; }
+.card-preview-layer .layer-footer { position: absolute; top: 8px; left: 8px; right: 62px; z-index: 3; padding: 0; min-height: 44px; background: transparent; gap: 6px; flex-wrap: wrap; pointer-events: none; }
+.card-preview-layer .layer-footer a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 10px; background: #080c13b8; font-size: 12px; color: #e3edce; text-decoration: none; pointer-events: auto; }
+.card-preview-layer .layer-footer button { pointer-events: auto; font-size: 12px; padding: 6px 10px; }
+.card-preview-layer[data-playback=playing] .layer-heading,.card-preview-layer[data-playback=loaded] .layer-heading { opacity: 0; }
+.card-preview-layer:has(.layer-footer:hover) .layer-heading,.card-preview-layer:has(.layer-footer:focus-within) .layer-heading,.card-preview-layer:has([data-preview-close]:focus-visible) .layer-heading { opacity: 1; }
+/* Preserve the complete X post rather than cropping provider content. */
+.card-preview-layer[data-provider=x] .layer-heading { display: none; }
+.public-page .card-preview-layer[data-provider=x] .preview-stage { top: 54px; height: calc(100% - 54px); }
+.card-preview-layer .preview-placeholder { font-size: 14px; }
+@media(prefers-reduced-motion:reduce) { .card-preview-layer .layer-heading { transition: none; } }
 `;
