@@ -184,3 +184,41 @@ test("credit label: Video of streamer, else Post of creator, else Anonymous", as
   assert.equal(credit({ streamer: "", creator: "" }), "Anonymous");
   assert.equal(credit({}), "Anonymous");
 });
+
+test("grid config: 3 rows of 6 by default, balanced distribution, no clip lost", async () => {
+  const { catalogConfig, distributeRows } = await import("../src/catalog");
+  assert.equal(catalogConfig.ROWS, 3);
+  assert.equal(catalogConfig.VIDEOS_PER_ROW, 6);
+  assert.equal(catalogConfig.IDLE_SWING_MS, 5000);
+  const n = (k: number) => Array.from({ length: k }, (_, i) => i);
+  assert.equal(catalogConfig.MIN_VIDEOS_PER_ROW, 3);
+  const sizes = (...args: Parameters<typeof distributeRows>) =>
+    distributeRows(...args).map((r) => r.length);
+  assert.deepEqual(distributeRows([]), []);
+  assert.deepEqual(sizes(n(1)), [1]);
+  assert.deepEqual(sizes(n(5)), [5]);
+  assert.deepEqual(sizes(n(7)), [4, 3]);
+  assert.deepEqual(sizes(n(10)), [4, 3, 3]);
+  assert.deepEqual(sizes(n(18)), [6, 6, 6]);
+  assert.deepEqual(sizes(n(20)), [7, 7, 6]);
+  assert.deepEqual(sizes(n(10), 2, 3, 1), [5, 5]);
+  assert.deepEqual(sizes(n(10), 1, 6), [10]);
+  assert.deepEqual(distributeRows(n(7)).flat(), n(7));
+  assert.deepEqual(distributeRows(n(4), 0, 0).flat(), n(4));
+});
+
+test("public catalog renders rows, collapsed equal cards and no overlay preview button", async () => {
+  const html = await (
+    await runtime.dispatchFetch("https://example.com/dia/" + edition.date)
+  ).text();
+  assert.equal((html.match(/data-rail-row/g) || []).length, 1);
+  assert.ok(html.includes('data-idle-swing="5000"'));
+  assert.ok(html.includes('class="rail-edge rail-edge-prev"'));
+  assert.ok(html.includes("creator-badge"));
+  const css = await (
+    await runtime.dispatchFetch("https://example.com/style.css")
+  ).text();
+  assert.ok(css.includes("--card-w"));
+  assert.ok(css.includes("-webkit-line-clamp: 2"));
+  assert.ok(css.includes("prefers-reduced-motion"));
+});

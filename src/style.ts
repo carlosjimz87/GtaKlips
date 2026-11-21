@@ -483,4 +483,47 @@ button:focus-visible {
 .brand { display: inline-flex; align-items: center; gap: .4em; }
 .brand b { font-weight: inherit; }
 .brand-logo { width: 1.5em; height: 1.5em; border-radius: 50%; flex: none; display: block; }
+/* Grid redesign: equal-size cards in up to 3 rows, edge-scroll, no overlay buttons. */
+.catalog-rows { display: grid; gap: 22px; }
+.rail-row { position: relative; min-width: 0; }
+.catalog-rail { gap: 16px; padding-block: 6px 12px; }
+.public-page .catalog-card { flex: 0 0 var(--card-w); width: var(--card-w); height: var(--card-h); overflow: hidden; }
+.public-page { --card-w: clamp(240px,21vw,300px); --card-h: 396px; }
+.catalog-card .clip-link { display: flex; flex-direction: column; flex: 1; min-height: 0; height: auto; }
+.catalog-card .poster { flex: none; }
+.catalog-card .poster img { transition: transform .35s ease; }
+.catalog-card .clip-info { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px 14px 14px; }
+.catalog-card .clip-info > * { flex-shrink: 0; }
+.catalog-card .card-heading { padding-bottom: 8px; margin-bottom: 10px; gap: 12px; }
+.catalog-card .card-rank { font-size: 20px; }
+.catalog-card .creator { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
+.creator-badge { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--lime); color: #17200c; font: 800 14px/1 system-ui; }
+.creator-text { display: grid; min-width: 0; line-height: 1.25; }
+.creator-text strong { font-size: 15px; font-weight: 800; color: var(--lime); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.creator-text small { color: #9fae91; font-size: 12px; }
+.catalog-card .clip-info h2 { font-size: 16px; line-height: 1.3; margin: 0 0 6px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.catalog-card .clip-caption { font-size: 13px; line-height: 1.45; margin: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.public-page .catalog-card .source { margin-top: auto; padding-top: 8px; font-size: 12px; color: #c8dfa0; }
+.catalog-card:not(.previewing):hover .poster img { transform: scale(1.04); }
+.catalog-card.previewing .poster::after { background: linear-gradient(transparent,#0b100899); }
+.card-preview-layer .fade-in, .hero-preview .fade-in { opacity: 0; transition: opacity .45s ease; }
+.card-preview-layer .fade-in.is-ready, .hero-preview .fade-in.is-ready { opacity: 1; }
+.rail-edge { position: absolute; top: 0; bottom: 18px; width: 56px; z-index: 5; display: none; opacity: 0; transition: opacity .25s; }
+.rail-edge-prev { left: -4px; background: linear-gradient(90deg,#090b0ccc,transparent); }
+.rail-edge-next { right: -4px; background: linear-gradient(270deg,#090b0ccc,transparent); }
+.rail-row.can-prev .rail-edge-prev, .rail-row.can-next .rail-edge-next { display: block; }
+.rail-row:hover .rail-edge { opacity: 1; }
+/* Visually hidden controls stay in the tab order and show up on keyboard focus. */
+.rail-sr, .catalog-card .preview-toolbar { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.rail-sr { display: flex; gap: 6px; }
+.rail-sr:focus-within { position: absolute; z-index: 6; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; top: -44px; right: 0; }
+.catalog-card .preview-toolbar:focus-within { z-index: 6; left: 8px; top: 8px; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; background: #090c07ee; border: 1px solid var(--lime); border-radius: 4px; padding: 4px; }
+@media (hover:none) {
+  .rail-edge { display: none !important; }
+  .catalog-card { height: calc(var(--card-h) + 52px); }
+  .catalog-card .preview-toolbar, .catalog-card .preview-toolbar:focus-within { position: static; width: auto; height: auto; margin: 0; clip-path: none; overflow: visible; padding: 8px 12px; border: 0; border-top: 1px solid #35402c; border-radius: 0; background: none; order: 3; }
+  .catalog-card .preview-toolbar button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
+}
+@media (max-width:650px) { .public-page { --card-w: min(72vw,260px); } .catalog-rows { gap: 16px; } }
+@media (prefers-reduced-motion:reduce) { .card-preview-layer .fade-in, .hero-preview .fade-in { opacity: 1; } }
 `;

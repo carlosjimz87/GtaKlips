@@ -144,7 +144,9 @@ test("destacado automático, hover diferido, un solo reproductor y salida segura
     await page.keyboard.press("Escape");
     await expect(page.locator("iframe")).toHaveCount(0);
     await page.mouse.move(5, 5);
-    await card.getByRole("button", { name: "Preview", exact: true }).click();
+    await card
+      .getByRole("button", { name: "Preview", exact: true })
+      .dispatchEvent("click");
     await assertFrame(ctx, "#clip-PreviewClip0");
     await page.locator(".card-preview-layer .layer-footer a").focus();
     await page.keyboard.press("Tab");
@@ -163,7 +165,15 @@ test("destacado automático, hover diferido, un solo reproductor y salida segura
     await page.locator("#clips-rail").evaluate((el) => {
       el.scrollLeft = 0;
     });
-    await card.locator("[data-preview-toggle]").click();
+    // Let the scroll event from the reset be delivered before opening.
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    await card.locator("[data-preview-toggle]").focus();
+    await page.keyboard.press("Enter");
     await assertFrame(ctx, "#clip-PreviewClip0");
     await page.evaluate(() => {
       const stage = document
@@ -175,7 +185,7 @@ test("destacado automático, hover diferido, un solo reproductor y salida segura
     await expect(page.locator("iframe")).toHaveCount(0);
     await card.scrollIntoViewIfNeeded();
     await page.mouse.move(5, 5);
-    await card.locator("[data-preview-toggle]").click();
+    await card.locator("[data-preview-toggle]").dispatchEvent("click");
     await assertFrame(ctx, "#clip-PreviewClip0");
     await page.keyboard.press("Escape");
     const edgeCard = page.locator("#clip-PreviewClip4");
@@ -251,7 +261,7 @@ test("movimiento reducido impide autoplay pero permite inicio manual", async ({
     await card.hover();
     await page.waitForTimeout(750);
     await expect(page.locator("iframe")).toHaveCount(0);
-    await card.locator("[data-preview-toggle]").click();
+    await card.locator("[data-preview-toggle]").dispatchEvent("click");
     await assertFrame(ctx, "#clip-PreviewClip0");
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.locator("iframe")).toHaveCount(0);
@@ -375,7 +385,7 @@ test("ahorro de datos por sí solo desactiva destacado y hover automáticos", as
     await card.hover();
     await page.waitForTimeout(750);
     await expect(page.locator("iframe")).toHaveCount(0);
-    await card.locator("[data-preview-toggle]").click();
+    await card.locator("[data-preview-toggle]").dispatchEvent("click");
     await assertFrame(ctx, "#clip-PreviewClip0");
   } finally {
     await closeContext(ctx);

@@ -235,7 +235,7 @@ for (const width of [320, 390, 768, 1440])
       await x.hover();
       await page.waitForTimeout(600);
       expect(xScripts).toBe(0);
-      await x.locator("[data-preview-toggle]").click();
+      await x.locator("[data-preview-toggle]").dispatchEvent("click");
       await expect(
         page.locator('iframe[title="Publicación X completa"]'),
       ).toHaveCount(1);

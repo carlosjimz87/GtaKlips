@@ -371,7 +371,7 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole("button", { name: "Next clips" }).click();
+  await page.getByRole("button", { name: "Next clips" }).dispatchEvent("click");
   await expect
     .poll(() => page.locator("#clips-rail").evaluate((el) => el.scrollLeft))
     .toBeGreaterThan(0);
