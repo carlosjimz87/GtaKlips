@@ -452,6 +452,7 @@ button:focus-visible {
 }
 @media (max-width:480px) { .public-page { --space: 16px; }.public-page header .nav-selection { display: none; }.public-page header nav { gap: 16px; font-size: 13px; }.public-page header nav .nav-search { padding: 8px 12px; }.section-heading { flex-wrap: wrap; }.rail-controls { margin-left: auto; }.genre-section .text-link { max-width: none; text-align: left; } }
 @media (max-width:431px) { .hero-preview,.catalog-card .preview-toolbar { display: none; }.featured-mobile { display: block; margin-top: 24px; }.featured-mobile .eyebrow { margin-bottom: 8px; }.featured-mobile .featured-credit { font-size: 14px; } }
+@media (prefers-contrast:more) { .catalog-rail { scrollbar-color: #f3f5e9 #000; } }
 @media (prefers-reduced-motion:reduce) { .public-page *,.public-page *::before,.public-page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
 /* The original card never changes size; only this viewport layer animates. */
