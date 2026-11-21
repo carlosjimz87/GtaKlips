@@ -199,7 +199,7 @@ document.querySelectorAll('[data-rail-row]').forEach((row, index) => {
     edge.addEventListener('pointerleave', () => { edgeDir = 0; rail.style.scrollSnapType = ''; cancelAnimationFrame(edgeFrame); arm(); });
   }
   new IntersectionObserver(entries => { onScreen = entries.at(-1).isIntersecting; if (onScreen) arm(); else { clearTimeout(idleTimer); cancelSwing(); } }, {threshold: .4}).observe(row);
-  reducedMotion.addEventListener('change', () => { if (reducedMotion.matches) { cancelSwing(); clearTimeout(idleTimer); } else arm(); });
+  reducedMotion.addEventListener('change', () => { if (reducedMotion.matches) { cancelSwing(); clearTimeout(idleTimer); edgeDir = 0; cancelAnimationFrame(edgeFrame); rail.style.scrollSnapType = ''; } else arm(); });
   update();
 });
 `;
