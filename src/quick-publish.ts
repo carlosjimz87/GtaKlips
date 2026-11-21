@@ -1,7 +1,8 @@
 import type { Env } from "./auth";
-import { getSelection, selectionClips } from "./inbox";
+import { getSelection, selectionClips, getCandidate } from "./inbox";
 import { dateValid, categories } from "./model";
 import { source } from "./source";
+import { enrichmentStatus } from "./enrichment";
 
 interface Row {
   revision: number;
@@ -40,6 +41,13 @@ export async function quickData(env: Env, date: string) {
     throw Error("Más de diez clips: ajusta la selección en la bandeja.");
   const clips = combined.map((c) => ({ ...c, id: source(c.url).id }));
   return {
+    enrichment: await Promise.all(
+      clips.map(async (clip) => ({
+        id: clip.id,
+        candidate: await getCandidate(env, clip.id),
+        job: await enrichmentStatus(env, clip.id),
+      })),
+    ),
     revision: row?.revision || 0,
     published: !!row?.published,
     categories,
@@ -63,6 +71,51 @@ const date = params.get("date") || new Date().toISOString().slice(0, 10);
 const $ = (s) => document.querySelector(s);
 const status = $("#status");
 let revision = 0, boxes = [], xInfo = {};
+let finished = false, publishing = false, latest = null, pollTimer;
+const fields = ["title", "streamer", "creator", "text", "category"];
+const baseline = new Map();
+const dirty = new Map();
+function rememberEdits(box, id) {
+  dirty.set(id, new Set());
+  box.addEventListener("input", (event) => { if (fields.includes(event.target.name)) dirty.get(id).add(event.target.name); });
+  box.addEventListener("change", (event) => { if (fields.includes(event.target.name)) dirty.get(id).add(event.target.name); });
+}
+function updates(data) {
+  return boxes.flatMap(box => {
+    const id = box.__clip.id;
+    const old = baseline.get(id), next = data.enrichment.find(e => e.id === id)?.candidate;
+    if (!old || !next) return [];
+    return fields.filter(k => next[k] !== old[k] && next[k] && !dirty.get(id)?.has(k))
+      .map(k => ({box, key:k, value:next[k]}));
+  });
+}
+function showLive(data) {
+  const ids = new Set(boxes.map(b => b.__clip.id));
+  const pending = data.enrichment.filter(e => ids.has(e.id) && ["queued", "running"].includes(e.job?.status)).length;
+  const failed = data.enrichment.filter(e => ids.has(e.id) && ["partial", "failed"].includes(e.job?.status)).length;
+  const count = updates(data).length;
+  $("#live-status").textContent = (pending ? pending + " vídeo(s) procesándose. " : "No hay análisis pendientes en estos vídeos. ") +
+    (failed ? failed + " análisis parcial(es) o fallido(s). " : "") +
+    (count ? "Hay datos nuevos disponibles. Tus cambios manuales se conservarán." : "Tus cambios manuales se conservan.");
+  $("#apply-new").hidden = !count;
+  if (data.revision !== revision) $("#live-status").textContent += " La edición ha cambiado en otra sesión; copia tus cambios antes de recargar.";
+}
+async function refreshLive() {
+  const response = await fetch("/admin/quick/data?date=" + encodeURIComponent(date), {cache:"no-store"});
+  if (!response.ok) throw Error("No se pudo comprobar el estado del análisis");
+  latest = await response.json();
+  showLive(latest);
+  return latest;
+}
+async function pollLive() {
+  if (finished) return;
+  if (!publishing && !document.hidden) {
+    try { await refreshLive(); }
+    catch { $("#live-status").textContent = "No se puede comprobar el análisis. Tus cambios siguen en el formulario."; }
+  }
+  if (!finished) pollTimer = setTimeout(pollLive, 5000);
+}
+
 const say = (t) => (status.textContent = t);
 async function api(path, payload) {
   const r = await fetch("/admin/" + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -114,6 +167,7 @@ function card(c, featured, cats) {
   rm.type = "button"; rm.textContent = "Quitar";
   rm.onclick = () => { box.remove(); boxes = boxes.filter((b) => b !== box); };
   box.append(rm);
+  rememberEdits(box, c.id);
   boxes.push(box);
   return box;
 }
@@ -131,6 +185,14 @@ function featuredId() {
 }
 async function publish() {
   try {
+    if (publishing || finished) return;
+    publishing = true;
+    $("#publish").disabled = true;
+    const fresh = await refreshLive();
+    if (fresh.revision !== revision) throw Error("La edición ha cambiado. Copia tus cambios antes de recargar.");
+    if (updates(fresh).length) throw Error("Hay datos nuevos. Pulsa Incorporar datos nuevos y revísalos antes de publicar.");
+    if (fresh.enrichment.some(e => boxes.some(b => b.__clip.id === e.id) && ["queued", "running"].includes(e.job?.status)) &&
+        !confirm("El análisis sigue trabajando. ¿Publicar los datos actuales sin esperar? Lo publicado no se actualizará automáticamente.")) return;
     if (!$("#quick").reportValidity()) return;
     if (!boxes.length) throw Error("Añade al menos un clip desde la bandeja");
     const clips = clipsPayload(), featured = featuredId();
@@ -143,6 +205,8 @@ async function publish() {
     };
     const r = await api("publish", { edition, revision });
     revision = r.revision;
+    finished = true;
+    clearTimeout(pollTimer);
     say("Edición publicada en la web.");
     $("#step1").hidden = true;
     $("#step2").hidden = false;
@@ -150,6 +214,7 @@ async function publish() {
     renderPicker(featured);
     await loadDraft();
   } catch (e) { say(e.message); }
+  finally { publishing = false; $("#publish").disabled = false; }
 }
 function renderPicker(selected) {
   const box = $("#picker");
@@ -184,6 +249,14 @@ async function copy(sel, label) {
   catch { say("No se pudo acceder al portapapeles: selecciona y copia el texto."); }
 }
 $("#publish").onclick = publish;
+$("#apply-new").onclick = () => {
+  if (!latest || publishing || finished) return;
+  for (const {box, key, value} of updates(latest)) box.querySelector("[name=" + key + "]").value = value;
+  for (const e of latest.enrichment) if (e.candidate) baseline.set(e.id, {...e.candidate});
+  showLive(latest);
+  say("Datos nuevos incorporados. Revisa el resultado; tus campos editados no se han tocado.");
+};
+window.addEventListener("pagehide", () => { finished = true; clearTimeout(pollTimer); });
 $("#copy-main").onclick = () => copy("#xtext", "Post");
 $("#copy-reply").onclick = () => copy("#xreply", "Respuesta");
 $("#xpublish").onclick = async () => {
@@ -203,17 +276,19 @@ $("#skip").onclick = () => say("Listo. La edición ya está publicada en la web.
     const j = await r.json();
     if (!r.ok) throw Error(j.error);
     revision = j.revision;
+    for (const e of j.enrichment) if (e.candidate) baseline.set(e.id, {...e.candidate});
     $("[name=etitle]").value = j.edition.title;
     $("[name=intro]").value = j.edition.intro;
     $("[name=hook]").value = j.edition.hook;
     $("#date").textContent = date;
     const list = $("#clips");
     for (const c of j.edition.clips) list.append(card(c, j.edition.featured, j.categories));
+    latest = j; showLive(j); pollTimer = setTimeout(pollLive, 5000);
     if (!j.edition.clips.length) say("No hay clips: añade enlaces en la bandeja y vuelve.");
   } catch (e) { say(e.message); }
 })();
 `;
 
 export function quickPage(): string {
-  return `<section class="hero"><p class="eyebrow">Publicar · <span id="date"></span></p><h1>Últimos detalles.</h1><p class="lead">Los datos vienen autocompletados de las fuentes. Revisa, corrige lo que falte y publica.</p><a href="/admin/inbox">Bandeja</a> · <a href="/admin">Editor completo</a></section><div class="editor"><div id="step1"><form id="quick"><div id="clips"></div><details><summary>Detalles de la edición (opcional)</summary><label>Título de la edición<input name="etitle" maxlength="100" required></label><label>Entradilla<textarea name="intro" maxlength="400" required></textarea></label><label>Gancho (por defecto, el título del destacado)<input name="hook" maxlength="160"></label></details><p class="meta">Al publicar confirmas que has revisado fuentes, contexto y duplicados.</p><div class="toolbar"><button class="primary" type="button" id="publish">Publicar edición</button></div></form></div><section id="step2" hidden><h2>Atrae visitas desde X</h2><p class="meta">Elige un solo vídeo para el post. Puedes editar el mensaje.</p><div id="picker"></div><label>Post<textarea id="xtext" maxlength="600"></textarea></label><label>Respuesta con el enlace a la web<textarea id="xreply" readonly></textarea></label><p id="xstate" class="meta"></p><div class="toolbar"><button class="primary" id="xpublish" hidden>Publicar en X</button><button id="copy-main" type="button">Copiar post</button><button id="copy-reply" type="button">Copiar respuesta</button><button id="skip" type="button">Ahora no</button><a class="button" id="public-link">Abrir edición pública ↗</a></div></section><p id="status" role="status" aria-live="polite"></p></div><script src="/admin/quick.js" defer></script>`;
+  return `<section class="hero"><p class="eyebrow">Publicar · <span id="date"></span></p><h1>Últimos detalles.</h1><p class="lead">Los datos vienen autocompletados de las fuentes. Revisa, corrige lo que falte y publica.</p><a href="/admin/inbox">Bandeja</a> · <a href="/admin">Editor completo</a></section><div class="editor"><div id="step1"><p id="live-status" role="status" aria-live="polite"></p><button id="apply-new" type="button" hidden>Incorporar datos nuevos</button><form id="quick"><div id="clips"></div><details><summary>Detalles de la edición (opcional)</summary><label>Título de la edición<input name="etitle" maxlength="100" required></label><label>Entradilla<textarea name="intro" maxlength="400" required></textarea></label><label>Gancho (por defecto, el título del destacado)<input name="hook" maxlength="160"></label></details><p class="meta">Al publicar confirmas que has revisado fuentes, contexto y duplicados.</p><div class="toolbar"><button class="primary" type="button" id="publish">Publicar edición</button></div></form></div><section id="step2" hidden><h2>Atrae visitas desde X</h2><p class="meta">Elige un solo vídeo para el post. Puedes editar el mensaje.</p><div id="picker"></div><label>Post<textarea id="xtext" maxlength="600"></textarea></label><label>Respuesta con el enlace a la web<textarea id="xreply" readonly></textarea></label><p id="xstate" class="meta"></p><div class="toolbar"><button class="primary" id="xpublish" hidden>Publicar en X</button><button id="copy-main" type="button">Copiar post</button><button id="copy-reply" type="button">Copiar respuesta</button><button id="skip" type="button">Ahora no</button><a class="button" id="public-link">Abrir edición pública ↗</a></div></section><p id="status" role="status" aria-live="polite"></p></div><script src="/admin/quick.js" defer></script>`;
 }
