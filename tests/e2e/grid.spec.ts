@@ -144,3 +144,29 @@ test("prefers-reduced-motion disables the idle swing", async ({
   ).toBe(0);
   await ctx.close();
 });
+
+test("switching reduced motion on stops active edge scrolling", async ({
+  browser,
+  request,
+}) => {
+  await seed(request, "2096-01-04", 10);
+  const ctx = await open(browser, "no-preference", 800);
+  const page = await ctx.newPage();
+  await page.goto("/dia/2096-01-04");
+  const rail = page.locator("#clips-rail");
+  await rail.scrollIntoViewIfNeeded();
+  const edge = page
+    .locator("[data-rail-row]")
+    .first()
+    .locator('[data-edge="1"]');
+  await edge.dispatchEvent("pointerenter", { pointerType: "mouse" });
+  await expect
+    .poll(() => rail.evaluate((e) => e.scrollLeft))
+    .toBeGreaterThan(10);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.waitForTimeout(100);
+  const position = await rail.evaluate((e) => e.scrollLeft);
+  await page.waitForTimeout(350);
+  expect(await rail.evaluate((e) => e.scrollLeft)).toBe(position);
+  await ctx.close();
+});

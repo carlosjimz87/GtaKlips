@@ -62,7 +62,7 @@ async function context(
   await ctx.route("https://clips.twitch.tv/embed?**", (route) =>
     route.fulfill({
       contentType: "text/html",
-      body: '<html><body style="margin:0;background:#162821;color:white"><p>Reproductor simulado de Twitch</p><button onclick="document.documentElement.requestFullscreen()">Pantalla completa</button></body></html>',
+      body: '<html><body style="margin:0;background:#162821;color:white"><p>Reproductor simulado de Twitch</p><button style="position:fixed;right:12px;bottom:12px" onclick="document.documentElement.requestFullscreen()">Pantalla completa</button></body></html>',
     }),
   );
   return ctx;
