@@ -1,4 +1,6 @@
-export const css = `
+import { designCss } from "./design-style";
+export const css =
+  `
 :root {
   color-scheme: dark;
   --bg: #101216;
@@ -526,4 +528,4 @@ button:focus-visible {
 }
 @media (max-width:650px) { .public-page { --card-w: min(72vw,260px); } .catalog-rows { gap: 16px; } }
 @media (prefers-reduced-motion:reduce) { .card-preview-layer .fade-in, .hero-preview .fade-in { opacity: 1; } }
-`;
+` + designCss;
