@@ -21,6 +21,15 @@ export interface Extraction {
   height: number;
   dimensionSource: "intrinsic" | "player" | "unavailable";
   imageType: "initial_frame" | "provider_poster" | "unavailable";
+  /** X flagged the media as sensitive content (warning interstitial or API flag). */
+  sensitive?: boolean;
+}
+export const sensitiveLabel = "⚠ Contenido sensible (X)";
+/** Detects X's sensitive-media interstitial in the embed text (EN/ES). */
+export function sensitiveText(text: string): boolean {
+  return /(potentially|may contain)\s+sensitive|sensitive (content|media)|contenido (potencialmente )?sensible|material sensible/i.test(
+    text,
+  );
 }
 export interface Suggestion {
   title: string;
@@ -90,6 +99,7 @@ export function extraction(v: any): Extraction {
     height: v.height,
     dimensionSource: v.dimensionSource,
     imageType: v.imageType,
+    ...(v.sensitive === true ? { sensitive: true } : {}),
   };
 }
 export function suggestion(v: any, e: Extraction): Suggestion {

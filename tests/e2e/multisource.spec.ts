@@ -119,8 +119,10 @@ test("five links through private inbox, prepared selection, editor and explicit 
     .click();
   await expect(page.getByRole("status")).toContainText("Edición publicada");
   await expect(page.locator("#post")).toHaveValue(/#clip-youtube:abcdefghijk/);
+  // The confirm may fire right after load (async fetch), so the handler must exist before navigating.
+  page.on("dialog", (dialog) => dialog.dismiss().catch(() => {}));
   await page.goto("/admin?selection=" + date);
-  page.once("dialog", (dialog) => dialog.dismiss()); // reload below exercises cancel before applying
+  await expect(page.getByRole("status")).toContainText("cancelada");
   await page.reload();
   await expect(page.getByRole("status")).toContainText("cancelada");
   const before = await (

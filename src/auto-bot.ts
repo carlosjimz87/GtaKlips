@@ -13,7 +13,8 @@ import { missingFields } from "./auto-state";
 import { categories, credit, validate, type Edition } from "./model";
 import { editionWrite } from "./edition-store";
 import { extractURLs } from "./telegram";
-import { queueEnrichment } from "./enrichment";
+import { queueEnrichment, sensitiveSources } from "./enrichment";
+import { sensitiveLabel } from "./enrichment-contract";
 
 type Key = { text: string; callback_data: string };
 export interface AutoReply {
@@ -86,6 +87,9 @@ async function board(env: Env, date: string, ids: string[], r: AutoReply) {
     )
       .bind(id)
       .first<any>();
+    const sensitive = (await sensitiveSources(env)).has(
+      c.provider + ":" + c.source_id,
+    );
     const missing = missingFields(c);
     const busy = job && ["queued", "running"].includes(job.status);
     const state =
@@ -96,7 +100,7 @@ async function board(env: Env, date: string, ids: string[], r: AutoReply) {
           : missing.length
             ? "Falta: " + missing.join(", ")
             : "Completo; revisa antes de publicar";
-    r.text += `\n${i + 1}. ${c.title || c.url}\n${credit(c)} · ${c.category || "Categoría pendiente"}\n${c.text ? c.text.slice(0, 130) : "Contexto pendiente"}\n${state}${job?.error ? " · " + job.error : ""}${busy && Date.now() - job.updated_at > 180000 ? " · Comprueba que el procesador local esté activo" : ""}\n`;
+    r.text += `\n${i + 1}. ${c.title || c.url}\n${sensitive ? sensitiveLabel + "\n" : ""}${credit(c)} · ${c.category || "Categoría pendiente"}\n${c.text ? c.text.slice(0, 130) : "Contexto pendiente"}\n${state}${job?.error ? " · " + job.error : ""}${busy && Date.now() - job.updated_at > 180000 ? " · Comprueba que el procesador local esté activo" : ""}\n`;
     r.keyboard.push([
       button(
         env,
