@@ -21,6 +21,7 @@ import {
   proposal,
   suggestion,
   type Extraction,
+  sensitiveText,
 } from "./enrichment-contract";
 export interface EnrichmentConfig {
   origin: string;
@@ -326,6 +327,13 @@ export async function collectPublicX(
     if (!frame) throw Error("Public embed unavailable");
     await frame.locator("article time").first().waitFor({ timeout: 15000 });
     const data = await targetWithMedia(frame, link.sourceId);
+    const sensitive = sensitiveText(
+      await frame
+        .locator("article")
+        .nth(data.articleIndex)
+        .innerText({ timeout: 1000 })
+        .catch(() => ""),
+    );
     const early = await frame.evaluate(
       () =>
         (
@@ -496,6 +504,7 @@ export async function collectPublicX(
         height,
         dimensionSource,
         imageType,
+        ...(sensitive ? { sensitive: true } : {}),
       }),
       jpeg,
     };

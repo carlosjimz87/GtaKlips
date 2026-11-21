@@ -2,6 +2,7 @@ import type { Env } from "./auth";
 import { getSelection, selectionClips, getCandidate } from "./inbox";
 import { dateValid, categories } from "./model";
 import { source } from "./source";
+import { sensitiveSources } from "./enrichment";
 import { enrichmentStatus } from "./enrichment";
 
 interface Row {
@@ -39,7 +40,15 @@ export async function quickData(env: Env, date: string) {
       });
   if (combined.length > 10)
     throw Error("Más de diez clips: ajusta la selección en la bandeja.");
-  const clips = combined.map((c) => ({ ...c, id: source(c.url).id }));
+  const flagged = await sensitiveSources(env);
+  const clips = combined.map((c) => {
+    const link = source(c.url);
+    return {
+      ...c,
+      id: link.id,
+      sensitive: flagged.has(link.provider + ":" + link.sourceId),
+    };
+  });
   return {
     enrichment: await Promise.all(
       clips.map(async (clip) => ({
@@ -139,6 +148,11 @@ function card(c, featured, cats) {
   const legend = document.createElement("legend");
   legend.textContent = c.title || c.url;
   box.append(legend);
+  if (c.sensitive) {
+    const warn = document.createElement("strong");
+    warn.textContent = "⚠ Contenido sensible (X): revisa antes de publicar";
+    box.append(warn);
+  }
   const link = document.createElement("a");
   link.href = c.url; link.target = "_blank"; link.rel = "noopener noreferrer";
   link.textContent = "Ver original ↗";
@@ -175,6 +189,7 @@ function clipsPayload() {
   return boxes.map((box) => {
     const c = { ...box.__clip };
     delete c.id;
+    delete c.sensitive;
     for (const k of ["title", "streamer", "creator", "text", "category"]) c[k] = box.querySelector("[name=" + k + "]").value;
     return c;
   });

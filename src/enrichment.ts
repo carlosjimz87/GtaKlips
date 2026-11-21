@@ -15,6 +15,13 @@ export function queueEnrichment(env: Env, id: string) {
     "INSERT INTO enrichment_jobs(candidate,updated_at) SELECT id,? FROM manual_candidates WHERE id=? AND state!='discarded' ON CONFLICT(candidate) DO NOTHING",
   ).bind(Date.now(), id);
 }
+/** Source ids (per provider) whose analysis flagged X sensitive content. */
+export async function sensitiveSources(env: Env): Promise<Set<string>> {
+  const { results } = await env.DB.prepare(
+    "SELECT c.provider,c.source_id FROM enrichment_results r JOIN manual_candidates c ON c.id=r.candidate WHERE json_extract(r.proposal,'$.extraction.sensitive')=1",
+  ).all<{ provider: string; source_id: string }>();
+  return new Set(results.map((r) => r.provider + ":" + r.source_id));
+}
 export async function enrichmentStatus(env: Env, id: string) {
   const job = await env.DB.prepare(
     "SELECT status,attempts,error,updated_at FROM enrichment_jobs WHERE candidate=?",
