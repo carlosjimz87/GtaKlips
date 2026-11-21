@@ -12,4 +12,6 @@ coverage/
 playwright-report/
 test-results/
 
+.idea
+
 *.md
