@@ -46,12 +46,14 @@ test("filter changes run a view transition, unless motion is reduced", async ({
     );
     await page.goto("/dia/" + date);
     await expect(page.locator(".catalog-card")).toHaveCount(6);
+    await page.evaluate(() => sessionStorage.removeItem("vt"));
     await page.locator(".filters a", { hasText: "Plays" }).click();
     await expect(page.locator(".catalog-card")).toHaveCount(3);
     await expect(page.locator(".filters a[aria-current]")).toHaveText("Plays");
-    expect(await page.evaluate(() => sessionStorage.getItem("vt"))).toBe(
-      reducedMotion === "reduce" ? "no" : "yes",
-    );
+    // pagereveal can fire after the new DOM is already visible, so poll.
+    await expect
+      .poll(() => page.evaluate(() => sessionStorage.getItem("vt")))
+      .toBe(reducedMotion === "reduce" ? "no" : "yes");
     await ctx.close();
   }
 });
