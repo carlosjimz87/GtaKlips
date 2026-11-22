@@ -494,8 +494,11 @@ button:focus-visible {
 .preview-stage[data-orientation=portrait] > img { object-fit: contain; }
 .preview-stage[data-provider=youtube][data-orientation=portrait] iframe { width: 200px; left: 50%; transform: translateX(-50%); }
 .preview-stage[data-provider=x] { overflow: auto; }
-.preview-stage[data-provider=x] iframe { position: static; min-height: 0; color-scheme: dark; }
+.preview-stage[data-provider=x] iframe { position: static; min-height: 0; }
 .preview-stage[data-provider=x] > div { position: relative; z-index: 1; }
+.preview-stage[data-provider=x] .twitter-tweet { margin: 0 auto !important; }
+.preview-stage[data-provider=x] iframe { max-width: 100%; background: transparent; }
+.hero-preview .preview-stage[data-provider=x] { height: auto; min-height: 0; padding: 12px; max-height: min(640px,80vh); }
 @media (max-width:431px) {
  .hero-preview[data-provider=youtube], .hero-preview[data-provider=x] { display: block; min-width: 0; }
  .catalog-card[data-provider=youtube] .preview-toolbar, .catalog-card[data-provider=x] .preview-toolbar { display: flex; }

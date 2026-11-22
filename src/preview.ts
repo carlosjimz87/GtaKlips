@@ -139,7 +139,7 @@ export const previewScript = `
         await load('x','https://platform.twitter.com/widgets.js',()=>!!window.twttr?.widgets?.createTweet);
         if(active!==entry)return;
         let timer;
-        const result=await Promise.race([window.twttr.widgets.createTweet(entry.el.dataset.preview,mount,{theme:'dark',dnt:true,conversation:'all',width:Math.floor(entry.stage.clientWidth)}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),8000);})]).finally(()=>clearTimeout(timer));
+        const result=await Promise.race([window.twttr.widgets.createTweet(entry.el.dataset.preview,mount,{theme:'dark',dnt:true,conversation:'all',width:Math.min(550,Math.floor(entry.stage.clientWidth))}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),8000);})]).finally(()=>clearTimeout(timer));
         if(active!==entry){mount.remove();return;}
         if(!result)throw Error('unavailable');
         status.textContent='X post. Use its controls; playback and availability are not guaranteed.';
