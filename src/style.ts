@@ -453,6 +453,26 @@ button:focus-visible {
 @media (max-width:480px) { .public-page { --space: 16px; }.public-page header .nav-selection { display: none; }.public-page header nav { gap: 16px; font-size: 13px; }.public-page header nav .nav-search { padding: 8px 12px; }.section-heading { flex-wrap: wrap; }.rail-controls { margin-left: auto; }.genre-section .text-link { max-width: none; text-align: left; } }
 @media (max-width:431px) { .hero-preview,.catalog-card .preview-toolbar { display: none; }.featured-mobile { display: block; margin-top: 24px; }.featured-mobile .eyebrow { margin-bottom: 8px; }.featured-mobile .featured-credit { font-size: 14px; } }
 @media (prefers-contrast:more) { .catalog-rail { scrollbar-color: #f3f5e9 #000; } }
+/* Filter changes: a cross-document view transition keeps the header and filters still,
+   fades the old clips out and brings the remaining ones in. No JS; browsers without
+   support (and reduced motion) just navigate as before. */
+@media (prefers-reduced-motion:no-preference) {
+  @view-transition { navigation: auto; }
+  .public-page header { view-transition-name: site-header; }
+  .public-page .filters { view-transition-name: filters; }
+  .public-page .result-count { view-transition-name: result-count; }
+  .catalog-rows, .empty-results { view-transition-name: clips; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+  ::view-transition-old(root) { display: none; }
+  ::view-transition-group(clips) { animation: none; }
+  ::view-transition-old(clips), ::view-transition-new(clips) { height: auto; mix-blend-mode: normal; }
+  ::view-transition-old(clips) { animation: gk-clips-out .16s cubic-bezier(.4,0,1,1) both; }
+  ::view-transition-new(clips) { animation: gk-clips-in .34s cubic-bezier(.16,1,.3,1) .12s both; }
+  ::view-transition-group(site-header) { animation-duration: 0s; }
+  ::view-transition-group(filters), ::view-transition-group(result-count) { animation-duration: .2s; }
+}
+@keyframes gk-clips-out { to { opacity: 0; transform: scale(.985); } }
+@keyframes gk-clips-in { from { opacity: 0; transform: translateY(10px) scale(.99); } }
 @media (prefers-reduced-motion:reduce) { .public-page *,.public-page *::before,.public-page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
 /* The original card never changes size; only this viewport layer animates. */
