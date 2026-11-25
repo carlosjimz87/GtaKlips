@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 
-test("filter changes run a view transition, unless motion is reduced", async ({
+test("filter changes reorganise cards in place, with history, with or without motion", async ({
   browser,
   request,
 }) => {
@@ -39,21 +39,19 @@ test("filter changes run a view transition, unless motion is reduced", async ({
       reducedMotion,
     });
     const page = await ctx.newPage();
-    await page.addInitScript(() =>
-      addEventListener("pagereveal", (e: any) =>
-        sessionStorage.setItem("vt", e.viewTransition ? "yes" : "no"),
-      ),
-    );
     await page.goto("/dia/" + date);
-    await expect(page.locator(".catalog-card")).toHaveCount(6);
-    await page.evaluate(() => sessionStorage.removeItem("vt"));
+    const visible = page.locator(".catalog-card:not([hidden])");
+    await expect(visible).toHaveCount(6);
+    await page.evaluate(() => ((window as any).sameDocument = true));
     await page.locator(".filters a", { hasText: "Plays" }).click();
-    await expect(page.locator(".catalog-card")).toHaveCount(3);
+    await expect(visible).toHaveCount(3);
     await expect(page.locator(".filters a[aria-current]")).toHaveText("Plays");
-    // pagereveal can fire after the new DOM is already visible, so poll.
-    await expect
-      .poll(() => page.evaluate(() => sessionStorage.getItem("vt")))
-      .toBe(reducedMotion === "reduce" ? "no" : "yes");
+    await expect(page).toHaveURL(/categoria=Jugadas/);
+    // Filtering reorganises the same document: no reload, no navigation.
+    expect(await page.evaluate(() => (window as any).sameDocument)).toBe(true);
+    await page.goBack();
+    await expect(visible).toHaveCount(6);
+    expect(await page.evaluate(() => (window as any).sameDocument)).toBe(true);
     await ctx.close();
   }
 });

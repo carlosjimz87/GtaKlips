@@ -56,11 +56,11 @@ function page(
   const archive = route === "/archivo";
   const hasSearch = content.includes('id="buscar"');
   const canSearch =
-    hasSearch || (archive && content.includes('<ul class="archive"><li>'));
+    hasSearch || (archive && content.includes('class="archive-edition"'));
   const search = hasSearch ? "#buscar" : "/#buscar";
   const header = privatePage
     ? `<header><a href="/" class="brand">${brandMark}<b>Gta<span>Klips</span></b></a><nav aria-label="Main"><a href="/">The selection</a><a href="/archivo">Archive</a></nav></header>`
-    : `<a class="skip-link" href="#contenido">Skip to content</a><header><div class="masthead"><a href="/" class="brand" aria-label="GtaKlips · Home">${brandMark}<b>Gta<span>Klips</span></b></a><span class="brand-caption">GTA VI, ONE<br>GREAT CLIP AT A TIME.</span></div><nav aria-label="Main"><a class="nav-selection" href="${hasSearch ? "#seleccion" : "/#seleccion"}" ${selection ? 'aria-current="page"' : ""}>Selection</a><a href="/archivo" ${archive ? 'aria-current="page"' : ""}>Archive</a>${canSearch ? `<a class="nav-search" href="${search}">Search</a>` : ""}</nav></header>`;
+    : `<a class="skip-link" href="#contenido">Skip to content</a><header><div class="masthead"><a href="/" class="brand" aria-label="GtaKlips · Home">${brandMark}<b>Gta<span>Klips</span></b></a><span class="brand-caption">GTA VI. Worth watching.</span></div><nav aria-label="Main"><a class="nav-selection" href="${hasSearch ? "#seleccion" : "/#seleccion"}" ${selection ? 'aria-current="page"' : ""}>Selection</a><a href="/archivo" ${archive ? 'aria-current="page"' : ""}>Archive</a>${canSearch ? `<a class="nav-search" href="${search}">Search</a>` : ""}</nav></header>`;
   const footer = privatePage
     ? "<footer>GtaKlips · Independent curation in English. Not affiliated with Rockstar Games or Twitch.</footer>"
     : `<footer class="editorial-footer"><div class="footer-main"><div><a href="/" class="brand">${brandMark}<b>Gta<span>Klips</span></b></a><p class="footer-statement">The stream passes.<br>The moment stays.</p><p class="footer-caption">A selection with context and credit to the people who make it possible.</p></div><nav aria-label="More moments"><p class="eyebrow">KEEP EXPLORING</p><a href="/#seleccion">Current selection</a><a href="/archivo">Previous editions</a></nav><div class="footer-credit"><p class="eyebrow">FROM THEIR CREATORS TO YOUR SCREEN</p><p>Every clip keeps its author and a link to the original source.</p><a class="button secondary" href="/archivo">Explore archive</a></div></div><div class="footer-bottom"><span>GtaKlips · Independent curation in English.</span><p>Not affiliated with Rockstar Games or Twitch. Videos and posts are shown through their official providers or on their own sites; we host no copies. Providers may apply their own cookies and content controls.</p></div></footer>`;
@@ -458,7 +458,17 @@ async function route(
       );
     return page(
       "Archive",
-      `<section class="hero"><p class="eyebrow">Good stories, no expiry date</p><h1>The archive.</h1><p class="lead">Every selection on its date. Go back to a moment worth revisiting.</p></section><ul class="archive">${rows.results.map((r) => `<li><time class="meta">${r.date}</time><br><a href="/dia/${r.date}">${esc(JSON.parse(r.published!).title)}</a></li>`).join("")}</ul>${!rows.results.length ? "<p>The first edition is on its way.</p>" : ""}`,
+      `<section class="hero"><p class="eyebrow">Good stories, no expiry date</p><h1>The archive.</h1><p class="lead">Every selection on its date. Go back to a moment worth revisiting.</p></section><ul class="archive">${rows.results
+        .map((r) => {
+          const edition: Edition = JSON.parse(r.published!);
+          const cover =
+            edition.clips.find((c) => c.id === edition.featured) ||
+            edition.clips[0];
+          return `<li class="archive-edition"><a href="/dia/${r.date}"><div class="archive-cover">${cover?.thumbnail ? `<img data-poster src="${esc(cover.thumbnail)}" alt="" width="480" height="270" loading="lazy" decoding="async">` : "<span>GtaKlips</span>"}</div><time datetime="${r.date}">${r.date}</time><h2>${esc(edition.title)}</h2><p>${edition.clips.length} ${edition.clips.length === 1 ? "clip" : "clips"}</p></a></li>`;
+        })
+        .join(
+          "",
+        )}</ul>${!rows.results.length ? "<p>The first edition is on its way.</p>" : ""}`,
       base + path,
     );
   }

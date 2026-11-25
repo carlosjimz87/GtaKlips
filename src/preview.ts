@@ -1,295 +1,120 @@
-// One active media session; provider scripts mount only after the fixed cover settles.
+// One shared screen. Provider frames are mounted only after explicit intent.
 export const previewScript = `
 (() => {
-  const owners = [...document.querySelectorAll('[data-preview]')];
-  const hero = owners.find(el => el.hasAttribute('data-preview-hero'));
+  const screen = document.querySelector('[data-preview-hero]');
+  if (!screen) return;
+  const stage = screen.querySelector('.preview-stage');
+  const status = screen.querySelector('.preview-status');
+  const toggle = screen.querySelector('[data-preview-toggle]');
+  const cards = [...document.querySelectorAll('.catalog-card[data-preview]')];
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  const desktop = matchMedia('(hover: hover) and (pointer: fine)');
-  const wide = matchMedia('(min-width: 432px)');
-  let dismissed = null, dismissedBox = null;
-  let active = null, hoverTimer = null, hoverOwner = null, leaveTimer = null, closing = null, observedHero = false, fullscreenSession = false;
-  const provider = el => el.dataset.provider || 'twitch';
-  const name = el => provider(el) === 'youtube' ? 'YouTube' : provider(el) === 'x' ? 'X' : 'Twitch';
-  const fits = el => provider(el) !== 'twitch' || wide.matches;
-  const autoAllowed = () => desktop.matches && !reduced.matches && !navigator.connection?.saveData;
-  const clearHover = () => { clearTimeout(hoverTimer); hoverTimer = hoverOwner = null; };
-  const clearLeave = () => { clearTimeout(leaveTimer); leaveTimer = null; };
-  const clearTimers = () => { clearHover(); clearLeave(); };
-  const inside = (root, target) => target instanceof Node && !!root?.contains(target);
-  const headerBottom = () => Math.max(0, document.querySelector('header')?.getBoundingClientRect().bottom || 0);
-  const viewportWidth = () => document.documentElement.clientWidth;
-  const visible = el => {
-    const box = el.getBoundingClientRect();
-    return box.width >= (el.dataset.provider === 'twitch' || !el.dataset.provider ? 400 : 200) && box.height >= (el.dataset.provider === 'twitch' || !el.dataset.provider ? 300 : 200) && box.left >= -.5 && box.right <= viewportWidth() + .5 && box.top >= headerBottom() - .5 && box.bottom <= innerHeight + .5;
-  };
-  const ownerVisible = el => {
-    const box = el.getBoundingClientRect(), rail = el.closest('.catalog-rail').getBoundingClientRect();
-    return box.right > Math.max(0, rail.left) && box.left < Math.min(viewportWidth(), rail.right) && box.bottom > headerBottom() && box.top < innerHeight;
-  };
-  const discardClosing = () => {
-    if (!closing) return;
-    closing.animation.cancel(); closing.layer.remove(); closing = null;
-  };
-  const mark = (el, playing) => {
-    el.classList.toggle('previewing', playing);
-    const button = el.querySelector('[data-preview-toggle]');
-    button.textContent = playing ? 'Stop preview' : 'Preview';
-    button.setAttribute('aria-pressed', String(playing));
-    if (el !== hero) {
-      button.setAttribute('aria-expanded', String(playing));
-      if (playing) button.setAttribute('aria-controls', 'clip-preview-layer');
-      else button.removeAttribute('aria-controls');
-    }
-  };
-  const stop = ({animate = true, restoreFocus = true, preserveHover = false} = {}) => {
-    if (!preserveHover || hoverOwner === active?.el) clearHover();
-    clearLeave();
-    if (!active) return;
-    const previous = active; active = null;
-    const focused = previous.layer?.contains(document.activeElement);
-    previous.animation?.cancel();
-    previous.player?.destroy?.(); previous.mount?.remove();
-    previous.stage.querySelectorAll('iframe').forEach(frame => frame.remove());
-    previous.playButton?.remove(); clearTimeout(previous.timeout); clearTimeout(previous.playTimeout);
-    mark(previous.el, false);
-    previous.el.querySelector('.preview-status').textContent = 'Preview stopped.';
-    if (!previous.layer) return;
-    const layer = previous.layer;
-    if (focused && restoreFocus) previous.el.querySelector('[data-preview-toggle]').focus({preventScroll: true});
-    layer.setAttribute('aria-hidden', 'true'); layer.inert = true;
-    if (animate && !reduced.matches && !document.hidden && layer.dataset.phase === 'ready') {
-      layer.dataset.phase = 'closing';
-      const animation = layer.animate([{opacity: 1}, {opacity: 0}], {duration: 220, easing: 'ease-out'});
-      closing = {layer, animation};
-      animation.finished.then(() => { layer.remove(); if (closing?.layer === layer) closing = null; }).catch(() => layer.remove());
-    } else layer.remove();
-  };
-  const dismiss = () => {
-    if (active?.el) {
-      // Keep the card and its expanded layer as the "stay closed" zone.
-      const a = active.el.getBoundingClientRect(), b = active.layer?.getBoundingClientRect() || a;
-      dismissedBox = {left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom)};
-    }
-    dismissed = active?.el || dismissed; stop();
-  };
-  const queueHover = el => {
-    if (dismissed || !autoAllowed()) return;
-    clearHover(); hoverOwner = el;
-    hoverTimer = setTimeout(() => { hoverTimer = hoverOwner = null; start(el); }, 550);
-  };
-  // The player fades in over the already-visible cover so nothing jumps or flashes.
-  const fadeIn = frame => {
-    frame.classList.add('fade-in');
-    frame.addEventListener('load', () => requestAnimationFrame(() => frame.classList.add('is-ready')), {once: true});
-    setTimeout(() => frame.classList.add('is-ready'), 2500);
-  };
-  const iframe = el => {
-    const url = new URL('https://clips.twitch.tv/embed');
-    url.searchParams.set('clip', el.dataset.preview);
-    url.searchParams.set('parent', location.hostname);
-    url.searchParams.set('autoplay', 'true'); url.searchParams.set('muted', 'true');
-    const frame = document.createElement('iframe');
-    frame.src = url.href; frame.title = 'Preview of ' + el.dataset.previewTitle;
-    frame.allow = 'autoplay; fullscreen'; frame.allowFullscreen = true;
-    frame.referrerPolicy = 'strict-origin-when-cross-origin';
-    fadeIn(frame);
-    return frame;
-  };
+  const desktop = matchMedia('(hover:hover) and (pointer:fine)');
+  const initial = {...screen.dataset};
+  let selected = screen, active = null, hoverTimer, focusReturn = null;
   const scripts = new Map();
-  const load = (key, url, ready) => {
-    if (ready()) return Promise.resolve();
-    if (scripts.has(key)) return scripts.get(key);
-    const promise = new Promise((resolve, reject) => {
-      const script = document.createElement('script'); script.src = url; script.async = true;
-      const timeout = setTimeout(() => { script.remove(); scripts.delete(key); reject(Error('timeout')); }, 8000);
-      const done = () => { clearTimeout(timeout); resolve(); };
-      script.onerror = () => { clearTimeout(timeout); scripts.delete(key); script.remove(); reject(Error('unavailable')); };
-      if (key === 'youtube') window.onYouTubeIframeAPIReady = done;
-      else script.onload = done;
-      document.head.append(script);
-    }); scripts.set(key, promise); return promise;
+  const name = () => ({youtube:'YouTube',twitch:'Twitch',x:'X'}[screen.dataset.provider] || 'source');
+  const state = (value, message) => { screen.dataset.playback=value; status.textContent=message; };
+  const enoughRoom = () => stage.clientWidth >= (screen.dataset.provider==='twitch'?400:200) && (screen.dataset.provider==='x' || stage.clientHeight >= (screen.dataset.provider==='twitch'?300:200));
+  const visible = () => { const b=stage.getBoundingClientRect(); return b.bottom>80 && b.top<innerHeight*.8; };
+  const stop = (message='Ready to watch.') => {
+    clearTimeout(hoverTimer);
+    const old=active; active=null;
+    if(old){clearTimeout(old.timeout);old.player?.destroy?.();old.mount.remove();}
+    screen.classList.remove('previewing');
+    toggle.textContent='Play';toggle.setAttribute('aria-pressed','false');
+    cards.forEach(c=>{c.classList.remove('previewing');const b=c.querySelector('[data-preview-toggle]');if(b)b.setAttribute('aria-pressed','false');});
+    state('idle',message);
   };
-  const finish = async entry => {
-    if (active !== entry) return;
-    entry.animation?.cancel(); entry.animation = null;
-    entry.stage.dataset.provider = provider(entry.el);
-    if (document.hidden || !fits(entry.el) || !visible(entry.stage) || (entry.layer && !ownerVisible(entry.el))) {
-      stop({animate: false}); return;
-    }
-    if (entry.layer) entry.layer.dataset.phase = 'ready';
-    const status = entry.el.querySelector('.preview-status');
-    status.textContent = 'Starts muted. ' + name(entry.el) + ' may ask for confirmation; if it does not start, open the original on ' + name(entry.el) + '.';
-    if (provider(entry.el) === 'twitch') { const frame=iframe(entry.el); frame.addEventListener('load',()=>{if(active===entry && entry.layer)entry.layer.dataset.playback='loaded';},{once:true}); entry.stage.append(frame); return; }
-    const mount = document.createElement('div'); entry.mount = mount; entry.stage.append(mount);
-    try {
-      if (provider(entry.el) === 'youtube') {
-        await load('youtube','https://www.youtube.com/iframe_api',() => !!window.YT?.Player);
-        if (active !== entry) return;
-        const frame = document.createElement('iframe');
-        const url = new URL('https://www.youtube.com/embed/' + entry.el.dataset.preview);
-        for (const [key,value] of Object.entries({enablejsapi:'1',origin:location.origin,playsinline:'1',controls:'1',autoplay:'1',mute:'1'})) url.searchParams.set(key,value);
-        frame.src=url.href; frame.title='YouTube · '+entry.el.dataset.previewTitle; frame.allow='autoplay; fullscreen'; frame.allowFullscreen=true; frame.referrerPolicy='strict-origin-when-cross-origin'; fadeIn(frame); mount.append(frame);
-        const button = document.createElement('button'); entry.playButton = button; button.type='button'; button.textContent='Play video'; button.hidden=true;
-        entry.playTimeout=setTimeout(()=>{if(active===entry && entry.layer?.dataset.playback!=='playing')button.hidden=false;},4000);
-        (entry.layer?.querySelector('.layer-footer') || entry.el.querySelector('.preview-toolbar')).append(button);
-        button.onclick=()=>entry.player?.playVideo();
-        entry.player=new window.YT.Player(frame,{events:{onReady:()=>{if(active!==entry)return;entry.player.mute();entry.player.playVideo();},onStateChange:event=>{if(active!==entry)return;if(event.data===1){button.hidden=true;clearTimeout(entry.playTimeout);if(entry.layer)entry.layer.dataset.playback='playing';status.textContent='Playing on YouTube. Controls are available on the video.';}else if(entry.layer && (event.data===2 || event.data===0)){entry.layer.dataset.playback='paused';}},onError:()=>{if(active!==entry)return;status.textContent='YouTube unavailable. Open the original on YouTube.';clearTimeout(entry.playTimeout);button.hidden=true;if(entry.layer)entry.layer.dataset.playback='error';}}});
-      } else {
-        status.textContent='Loading the full X post. No autoplay; open the original if it is unavailable.';
+  const load = (key,url,ready) => {
+    if(ready())return Promise.resolve();
+    if(scripts.has(key))return scripts.get(key);
+    const promise=new Promise((resolve,reject)=>{
+      const script=document.createElement('script'); script.src=url; script.async=true;
+      const fail=()=>{clearTimeout(timer);script.remove();scripts.delete(key);reject(Error('unavailable'));};
+      const timer=setTimeout(fail,8000);
+      const done=()=>{clearTimeout(timer);resolve();};
+      script.onerror=fail;
+      if(key==='youtube'){const previous=window.onYouTubeIframeAPIReady;window.onYouTubeIframeAPIReady=()=>{try{previous?.();}finally{done();}};}
+      else script.onload=done;
+      document.head.append(script);
+    }); scripts.set(key,promise);return promise;
+  };
+  const select = el => {
+    if(selected===el)return;
+    stop(); selected=el;
+    const data=el===screen?initial:el.dataset;
+    for(const key of ['provider','sourceUrl','orientation','preview','previewTitle'])screen.dataset[key]=data[key]||'';
+    stage.dataset.provider=data.provider;stage.dataset.orientation=data.orientation||'auto';
+    const set=(selector,text)=>{const node=screen.querySelector(selector);if(node)node.textContent=text||'';};
+    set('[data-cinema-title]',data.previewTitle);
+    set('[data-cinema-credit]',data.previewCredit||el.querySelector('.creator strong')?.textContent);
+    set('[data-cinema-context]',data.previewContext||el.querySelector('.clip-caption')?.textContent);
+    const source=screen.querySelector('.preview-source');source.href=data.sourceUrl;source.textContent='Open original on '+name();
+    stage.querySelectorAll('img').forEach(img=>img.remove());
+    const poster=data.previewPoster||el.querySelector('.poster img')?.getAttribute('src');
+    if(poster){const img=document.createElement('img');img.src=poster;img.alt='';img.decoding='async';img.onerror=()=>img.remove();stage.prepend(img);}
+    cards.forEach(c=>{const chosen=c===el;c.classList.toggle('is-selected',chosen);if(chosen)c.setAttribute('aria-current','true');else c.removeAttribute('aria-current');});
+    state('idle','Ready to watch on '+name()+'.');
+    document.dispatchEvent(new CustomEvent('gtaklips:selection',{detail:{id:el.id}}));
+  };
+  const start = async (el,manual=true) => {
+    clearTimeout(hoverTimer);
+    if(document.hidden)return;
+    if(!manual && (active?.manual || reduced.matches || navigator.connection?.saveData || !desktop.matches || !visible() || el.dataset.provider==='x'))return;
+    if(!/^[A-Za-z0-9_-]{1,100}$/.test(el.dataset.preview||''))return;
+    if(active && selected===el){if(manual)active.manual=true;return;}
+    select(el); stop();
+    if(manual && !visible())screen.scrollIntoView({block:'start',behavior:reduced.matches?'instant':'smooth'});
+    if(!enoughRoom()){state('unavailable','The full '+name()+' player does not fit here. Open the original.');return;}
+    focusReturn=el.querySelector('[data-preview-toggle]');
+    const mount=document.createElement('div');mount.className='cinema-mount';stage.append(mount);
+    const entry={mount,manual,player:null,timeout:null};active=entry;
+    screen.classList.add('previewing');stage.dataset.provider=screen.dataset.provider;
+    toggle.textContent='Stop';toggle.setAttribute('aria-pressed','true');
+    state('loading','Loading '+name()+'…');
+    const fail=()=>{if(active!==entry)return;clearTimeout(entry.timeout);entry.player?.destroy?.();mount.replaceChildren();state('error',name()+' is unavailable. Open the original or stop and retry.');};
+    try{
+      if(screen.dataset.provider==='x'){
         await load('x','https://platform.twitter.com/widgets.js',()=>!!window.twttr?.widgets?.createTweet);
         if(active!==entry)return;
         let timer;
-        const result=await Promise.race([window.twttr.widgets.createTweet(entry.el.dataset.preview,mount,{theme:'dark',dnt:true,conversation:'all',width:Math.min(550,Math.floor(entry.stage.clientWidth))}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),8000);})]).finally(()=>clearTimeout(timer));
+        const result=await Promise.race([window.twttr.widgets.createTweet(screen.dataset.preview,mount,{theme:'dark',dnt:true,conversation:'all',width:Math.min(550,Math.floor(stage.clientWidth))}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),10000);})]).finally(()=>clearTimeout(timer));
         if(active!==entry){mount.remove();return;}
         if(!result)throw Error('unavailable');
-        status.textContent='X post. Use its controls; playback and availability are not guaranteed.';
+        state('ready','Post loaded. Use the controls in the original X post.');
+      }else{
+        const youtube=screen.dataset.provider==='youtube';
+        if(youtube)await load('youtube','https://www.youtube.com/iframe_api',()=>!!window.YT?.Player);
+        if(active!==entry)return;
+        const frame=document.createElement('iframe');
+        const url=new URL(youtube?'https://www.youtube.com/embed/'+screen.dataset.preview:'https://clips.twitch.tv/embed');
+        const params=youtube?{enablejsapi:'1',origin:location.origin,playsinline:'1',controls:'1',autoplay:'1',mute:'1'}:{clip:screen.dataset.preview,parent:location.hostname,autoplay:'true',muted:'true'};
+        for(const [key,value]of Object.entries(params))url.searchParams.set(key,value);
+        frame.src=url.href;frame.title=name()+' — '+screen.dataset.previewTitle;frame.allow='autoplay; fullscreen';frame.allowFullscreen=true;frame.referrerPolicy='strict-origin-when-cross-origin';
+        frame.onerror=fail;
+        frame.onload=()=>{if(active!==entry)return;if(!youtube){clearTimeout(entry.timeout);state('ready','Player loaded. Use its controls to play or enable sound.');}};
+        mount.append(frame);entry.timeout=setTimeout(()=>{if(active===entry)state('blocked','If playback has not started, use the player controls or open the original.');},10000);
+        if(youtube)entry.player=new window.YT.Player(frame,{events:{onReady:()=>{if(active!==entry)return;state('ready','Player ready. Starts muted; use its controls for sound.');entry.player.mute();entry.player.playVideo();},onStateChange:event=>{if(active!==entry)return;if(event.data===1){clearTimeout(entry.timeout);state('playing','Playing on YouTube.');}else if(event.data===2){clearTimeout(entry.timeout);state('paused','Paused.');}else if(event.data===0){clearTimeout(entry.timeout);state('ended','Finished. Choose another clip below.');}},onError:fail}});
       }
-    } catch { if(active===entry){mount.remove();status.textContent=name(entry.el)+' unavailable. Open the original.';} }
+    }catch{fail();}
   };
-  const handoff = (event, el, layer) => {
-    if (event.pointerType !== 'mouse' || document.fullscreenElement || fullscreenSession) return;
-    if (inside(el, event.relatedTarget) || inside(layer, event.relatedTarget)) return;
-    // Entering a cross-origin frame can report no related target.
-    if (!event.relatedTarget && layer) {
-      const box = layer.getBoundingClientRect();
-      if (event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom) return;
-    }
-    if (hoverOwner === el) clearHover();
-    if (active?.el !== el) return;
-    clearLeave();
-    leaveTimer = setTimeout(() => { if (active?.el === el) stop({preserveHover: true}); }, 130);
-  };
-  const focusHandoff = (event, el, layer) => {
-    const expected = active;
-    if (expected?.el !== el) return;
-    const left = target => !inside(el, target) && !inside(layer, target);
-    if (event.relatedTarget) { if (left(event.relatedTarget)) stop({restoreFocus: false}); return; }
-    // Cross-origin iframe focus can have a null relatedTarget. Check the settled
-    // parent focus instead of destroying the player during its own play click.
-    setTimeout(() => { if (active === expected && left(document.activeElement)) stop({restoreFocus: false}); }, 0);
-  };
-  const makeLayer = el => {
-    const anchor = el.getBoundingClientRect();
-    const orientation = el.dataset.orientation || 'auto';
-    const portrait = orientation === 'portrait';
-    // Never cover a whole neighbour: growth is bounded to 64px on either side.
-    // Twitch's official minimum is the only exception (still leaves a reachable strip).
-    const width = Math.min(viewportWidth() - 24, Math.max(provider(el)==='twitch'?402:222,
-      portrait ? Math.min(340,anchor.width+24) : Math.min(520,anchor.width+128)));
-    const available = innerHeight - headerBottom() - 24;
-    const height = Math.min(available, portrait ? Math.min(560,anchor.height+120) :
-      provider(el)==='x' ? Math.min(480,anchor.height+64) : orientation==='square' ? width : Math.max(provider(el)==='twitch'?302:242,width*9/16+2));
-    if(height < (provider(el)==='twitch'?302:242))return null;
-    if (width < (provider(el) === 'twitch' ? 402 : 222) || !ownerVisible(el)) return null;
-    const layer = document.createElement('section');
-    layer.className = 'card-preview-layer'; layer.id = 'clip-preview-layer';
-    layer.dataset.previewOwner = el.id; layer.dataset.phase = 'opening';
-    layer.setAttribute('role', 'region');
-    layer.setAttribute('aria-label', 'Preview of ' + el.dataset.previewTitle);
-    layer.innerHTML = '<div class="preview-stage"><span class="preview-placeholder">Loading video…</span></div><div class="layer-heading"><div><h2></h2><p class="layer-creator"></p></div></div><button type="button" data-preview-close aria-label="Close preview">×</button><div class="layer-footer"><a target="_blank" rel="noopener noreferrer"></a></div>';
-    layer.dataset.provider = provider(el); layer.dataset.orientation = orientation;
-    layer.dataset.playback = 'loading';
-    layer.querySelector('a').textContent = 'Open on ' + name(el) + ' ↗';
-    layer.querySelector('h2').textContent = el.dataset.previewTitle;
-    layer.querySelector('.layer-creator').textContent = (el.querySelector('.creator strong')?.textContent || '') + ' · ' + name(el);
-    layer.querySelector('a').href = el.dataset.sourceUrl || 'https://clips.twitch.tv/' + el.dataset.preview;
-    const stage = layer.querySelector('.preview-stage'); stage.dataset.provider = provider(el); stage.dataset.orientation = el.dataset.orientation || 'auto';
-    const poster = el.querySelector('.poster img');
-    if (poster?.naturalWidth) {
-      const cover = poster.cloneNode(false); cover.alt = ''; cover.hidden = false;
-      cover.removeAttribute('data-poster'); cover.removeAttribute('loading');
-      cover.addEventListener('error', () => { cover.hidden = true; });
-      stage.prepend(cover);
-    }
-    layer.style.width = width + 'px'; layer.style.height=height+'px'; layer.style.top = (headerBottom() + 12) + 'px';
-    el.after(layer);
-    const top = headerBottom() + 12;
-    if (height > innerHeight - top - 12) { layer.remove(); return null; }
-    layer.style.left = Math.max(12, Math.min(anchor.left + (anchor.width - width) / 2, viewportWidth() - width - 12)) + 'px';
-    layer.style.top = Math.max(top, Math.min(anchor.top + (anchor.height-height)/2, innerHeight - height - 12)) + 'px';
-    layer.querySelector('[data-preview-close]').addEventListener('click', dismiss);
-    layer.addEventListener('pointerenter', () => { if (active?.el === el) clearLeave(); });
-    layer.addEventListener('pointerleave', event => handoff(event, el, layer));
-    layer.addEventListener('focusout', event => focusHandoff(event, el, layer));
-    return {layer, stage, anchor};
-  };
-  const start = (el, manual = false) => {
-    clearTimers();
-    if (manual) { dismissed=null; dismissedBox=null; }
-    if (active?.el === el) return;
-    if (document.hidden || !fits(el) || (!manual && (!autoAllowed() || provider(el) === 'x')) || !/^[A-Za-z0-9_-]{1,100}$/.test(el.dataset.preview)) return;
-    stop({animate: false, restoreFocus: false}); discardClosing();
-    if (el === hero) {
-      const stage = el.querySelector('.preview-stage'); stage.dataset.provider = provider(el); stage.dataset.orientation = el.dataset.orientation || 'auto';
-      if (manual && !visible(stage)) stage.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'instant'});
-      if (!visible(stage)) return;
-      active = {el, stage, layer: null, animation: null}; mark(el, true); finish(active); return;
-    }
-    const floating = makeLayer(el);
-    if (!floating) {
-      el.querySelector('.preview-status').textContent = 'Not enough room for the full player. Open the original.'; return;
-    }
-    const {layer, stage, anchor} = floating;
-    const entry = {el, layer, stage, animation: null}; active = entry; mark(el, true);
-    el.querySelector('.preview-status').textContent = 'Opening preview.';
-    if (manual) layer.querySelector('[data-preview-close]').focus({preventScroll: true});
-    if (reduced.matches) { finish(entry); return; }
-    const box = layer.getBoundingClientRect();
-    const dx = anchor.left + anchor.width / 2 - box.left - box.width / 2;
-    const dy = anchor.top + anchor.height / 2 - box.top - box.height / 2;
-    entry.animation = layer.animate([
-      {opacity: 0, transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + anchor.width / box.width + ',' + anchor.height / box.height + ')'},
-      {opacity: 1, offset: .55},
-      {opacity: 1, transform: 'translate(0px,0px) scale(1,1)'}
-    ], {duration: 360, easing: 'cubic-bezier(.22,.7,.2,1)'});
-    entry.animation.finished.then(() => finish(entry)).catch(() => {});
-  };
-  for (const el of owners) {
-    const stage=el.querySelector('.preview-stage'); if(stage)stage.dataset.provider=provider(el);
-    el.querySelector('.preview-toolbar').hidden = false;
-    el.querySelector('[data-preview-toggle]').addEventListener('click', () => active?.el === el ? dismiss() : start(el, true));
-    if (el !== hero) {
-      el.querySelector('[data-preview-toggle]').setAttribute('aria-expanded', 'false');
-      el.addEventListener('pointerenter', event => {
-        if (active?.el === el) clearLeave();
-        if (event.pointerType !== 'mouse' || !autoAllowed()) return;
-        queueHover(el);
-      });
-      el.addEventListener('pointerleave', event => handoff(event, el, active?.el === el ? active.layer : null));
-      el.addEventListener('focusout', event => focusHandoff(event, el, active?.el === el ? active.layer : null));
-    }
+  screen.querySelector('.preview-toolbar').hidden=false;
+  toggle.textContent='Play';
+  toggle.addEventListener('click',()=>active?stop():start(selected));
+  for(const card of cards){
+    const button=card.querySelector('[data-preview-toggle]');
+    if(button){card.querySelector('.preview-toolbar').hidden=false;button.textContent='Play';button.addEventListener('click',()=>start(card));}
+    card.querySelector('.clip-link')?.addEventListener('click',event=>{if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();start(card);});
+    card.addEventListener('pointerenter',event=>{if(event.pointerType!=='mouse')return;clearTimeout(hoverTimer);hoverTimer=setTimeout(()=>start(card,false),650);});
+    card.addEventListener('pointerleave',()=>{clearTimeout(hoverTimer);if(active&&!active.manual&&selected===card)stop();});
   }
-  // Removing a layer can generate pointerenter without a physical mouse move.
-  // Respect explicit dismissal until the pointer genuinely leaves its card.
-  document.addEventListener('pointermove', event => {
-    if (!dismissed || event.pointerType !== 'mouse' || (!event.movementX && !event.movementY)) return;
-    const box=dismissedBox||dismissed.getBoundingClientRect();
-    if(event.clientX>=box.left && event.clientX<=box.right && event.clientY>=box.top && event.clientY<=box.bottom)return;
-    dismissed=null; dismissedBox=null;
-    const next=event.target instanceof Element ? event.target.closest('.catalog-card[data-preview]') : null;
-    if(next)queueHover(next);
-  }, {passive:true});
-  const check = () => {
-    if (document.fullscreenElement || fullscreenSession) return;
-    if (active && (!fits(active.el) || (active.layer ? !ownerVisible(active.el) || (active.layer.dataset.phase === 'ready' && !visible(active.stage)) : !visible(active.stage)))) stop({animate: false});
-  };
-  const observer = new IntersectionObserver(() => {
-    check();
-    if (hero && !observedHero && !active && visible(hero.querySelector('.preview-stage')) && autoAllowed() && !document.hidden) {
-      observedHero = true; start(hero);
-    }
-  }, {threshold: [0, .5, 1]});
-  for (const el of owners) observer.observe(el);
-  addEventListener('scroll', event => { if (active && provider(active.el) === 'x' && inside(active.stage,event.target)) return; if (document.fullscreenElement || fullscreenSession) return; clearTimers(); if (active?.layer) stop({animate: false}); else check(); }, {passive: true, capture: true});
-  addEventListener('resize', () => { if (document.fullscreenElement || fullscreenSession) return; clearTimers(); if (active?.layer) stop({animate: false}); else check(); });
-  document.addEventListener('fullscreenchange', () => {
-    if (document.fullscreenElement) { fullscreenSession = true; clearTimers(); }
-    else requestAnimationFrame(() => requestAnimationFrame(() => { fullscreenSession = false; check(); }));
-  });
-  addEventListener('pagehide', () => { stop({animate: false, restoreFocus: false}); discardClosing(); });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { stop({animate: false, restoreFocus: false}); discardClosing(); } });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') dismiss(); });
-  reduced.addEventListener('change', () => { if (reduced.matches) { stop({animate: false}); discardClosing(); } });
-  navigator.connection?.addEventListener('change', () => { if (navigator.connection.saveData) stop({animate: false}); });
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&active){stop();focusReturn?.focus({preventScroll:true});}});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+  addEventListener('pagehide',()=>stop());
+  addEventListener('resize',()=>{if(active&&!document.fullscreenElement&&!enoughRoom())stop('Player no longer fits. Open the original.');});
+  reduced.addEventListener('change',()=>{if(reduced.matches&&active&&!active.manual)stop();});
+  navigator.connection?.addEventListener('change',()=>{if(navigator.connection.saveData&&active&&!active.manual)stop();});
+  document.addEventListener('gtaklips:filter',()=>{clearTimeout(hoverTimer);if(active&&!active.manual)stop();});
+  const observer=new IntersectionObserver(()=>{if(active&&!visible()&&!document.fullscreenElement)stop();},{threshold:0});observer.observe(stage);
 })();
 `;

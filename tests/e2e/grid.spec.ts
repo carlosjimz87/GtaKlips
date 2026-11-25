@@ -1,10 +1,5 @@
 import { readFile } from "node:fs/promises";
-import {
-  test,
-  expect,
-  type APIRequestContext,
-  type Browser,
-} from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 
 async function seed(request: APIRequestContext, date: string, count: number) {
   const token = await readFile(".wrangler/e2e/editor-token", "utf8");
@@ -39,94 +34,59 @@ async function seed(request: APIRequestContext, date: string, count: number) {
   });
   expect(result.status()).toBe(200);
 }
-const open = (
-  browser: Browser,
-  reducedMotion: "reduce" | "no-preference",
-  width = 1440,
-) =>
-  browser.newContext({
-    viewport: { width, height: 1200 },
-    isMobile: false,
-    hasTouch: false,
-    deviceScaleFactor: 1,
-    reducedMotion,
+for (const count of [1, 2, 5, 7, 10])
+  test(`${count} clips: fluid grid, identical cards, no overflow, no orphan gaps`, async ({
+    browser,
+    request,
+  }) => {
+    const date = `2096-0${1 + [1, 2, 5, 7, 10].indexOf(count)}-01`;
+    await seed(request, date, count);
+    for (const width of [320, 768, 1440]) {
+      const ctx = await browser.newContext({
+        viewport: { width, height: 1000 },
+        deviceScaleFactor: 1,
+        reducedMotion: "reduce",
+      });
+      try {
+        const page = await ctx.newPage();
+        await page.goto("/dia/" + date);
+        const cards = page.locator(".catalog-card:not([hidden])");
+        await expect(cards).toHaveCount(count);
+        const boxes = await cards.evaluateAll((els) =>
+          els.map((el) => {
+            const b = el.getBoundingClientRect();
+            const poster = el.querySelector(".poster")!.getBoundingClientRect();
+            return {
+              x: Math.round(b.x),
+              w: Math.round(b.width),
+              pw: Math.round(poster.width),
+              ph: Math.round(poster.height),
+              top: Math.round(b.top + scrollY),
+            };
+          }),
+        );
+        // Every poster has the same 16:9 geometry, whatever the title length.
+        for (const b of boxes) {
+          expect(Math.abs(b.pw - boxes[0].pw)).toBeLessThanOrEqual(1);
+          expect(
+            Math.abs(b.ph - Math.round((b.pw * 9) / 16)),
+          ).toBeLessThanOrEqual(2);
+          expect(b.x).toBeGreaterThanOrEqual(0);
+          expect(b.x + b.w).toBeLessThanOrEqual(width + 1);
+        }
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth + 1,
+          ),
+        ).toBe(true);
+        // Cards never scroll sideways: no rail container with horizontal overflow.
+        expect(
+          await page
+            .locator(".catalog-grid")
+            .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+        ).toBe(true);
+      } finally {
+        await ctx.close();
+      }
+    }
   });
-
-test("10 clips become 3 rows (4/3/3) with identical card sizes", async ({
-  browser,
-  request,
-}) => {
-  await seed(request, "2096-01-01", 10);
-  const ctx = await open(browser, "reduce");
-  const page = await ctx.newPage();
-  await page.goto("/dia/2096-01-01");
-  await expect(page.locator("[data-rail-row]")).toHaveCount(3);
-  await expect(page.locator("#clips-rail .catalog-card")).toHaveCount(4);
-  await expect(page.locator("#clips-rail-2 .catalog-card")).toHaveCount(3);
-  await expect(page.locator("#clips-rail-3 .catalog-card")).toHaveCount(3);
-  const sizes = await page.locator(".catalog-card").evaluateAll((cards) =>
-    cards.map((c) => {
-      const r = c.getBoundingClientRect();
-      return `${Math.round(r.width)}x${Math.round(r.height)}`;
-    }),
-  );
-  expect(new Set(sizes).size).toBe(1);
-  // Collapsed text: titles and context never exceed two lines.
-  const clamped = await page
-    .locator(".catalog-card h2, .catalog-card .clip-caption")
-    .evaluateAll((els) =>
-      els.every((e) => {
-        const lh = parseFloat(getComputedStyle(e).lineHeight);
-        return e.getBoundingClientRect().height <= lh * 2 + 1;
-      }),
-    );
-  expect(clamped).toBe(true);
-  await expect(
-    page.locator(".catalog-card .creator strong").first(),
-  ).toHaveText("Anonymous");
-  await expect(page.locator(".catalog-card .creator strong").nth(1)).toHaveText(
-    "Video of Streamer number 1",
-  );
-  // The old overlay button is no longer visible on desktop.
-  await expect(
-    page.locator(".catalog-card [data-preview-toggle]").first(),
-  ).not.toBeInViewport({ ratio: 0.5 });
-  await page.locator("#seleccion").scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: test.info().outputPath("grid-3-rows.png"),
-    fullPage: false,
-  });
-  await ctx.close();
-});
-
-test("rows never auto-scroll and pointer devices get visible arrows", async ({
-  browser,
-  request,
-}) => {
-  await seed(request, "2096-01-02", 10);
-  const ctx = await open(browser, "no-preference", 800);
-  const page = await ctx.newPage();
-  await page.goto("/dia/2096-01-02");
-  const rail = page.locator("#clips-rail");
-  await rail.scrollIntoViewIfNeeded();
-  const left = () => rail.evaluate((el) => el.scrollLeft);
-  // No idle swing and no edge-hover scrolling.
-  await page.waitForTimeout(6500);
-  expect(await left()).toBe(0);
-  const box = (await rail.boundingBox())!;
-  await page.mouse.move(box.x + box.width - 20, box.y + 40);
-  await page.waitForTimeout(500);
-  expect(await left()).toBe(0);
-  // Visible arrow scrolls the row on click.
-  const next = page.getByRole("button", { name: "Next clips (row 1 of 3)" });
-  await expect(next).toBeVisible();
-  await next.click();
-  await expect.poll(left, { timeout: 5000 }).toBeGreaterThan(100);
-  const prev = page.getByRole("button", {
-    name: "Previous clips (row 1 of 3)",
-  });
-  await expect(prev).toBeVisible();
-  await prev.click();
-  await expect.poll(left, { timeout: 5000 }).toBeLessThan(2);
-  await ctx.close();
-});
