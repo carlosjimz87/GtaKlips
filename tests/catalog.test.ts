@@ -189,7 +189,6 @@ test("grid config: 3 rows of 6 by default, balanced distribution, no clip lost",
   const { catalogConfig, distributeRows } = await import("../src/catalog");
   assert.equal(catalogConfig.ROWS, 3);
   assert.equal(catalogConfig.VIDEOS_PER_ROW, 6);
-  assert.equal(catalogConfig.IDLE_SWING_MS, 5000);
   const n = (k: number) => Array.from({ length: k }, (_, i) => i);
   assert.equal(catalogConfig.MIN_VIDEOS_PER_ROW, 3);
   const sizes = (...args: Parameters<typeof distributeRows>) =>
@@ -212,8 +211,8 @@ test("public catalog renders rows, collapsed equal cards and no overlay preview 
     await runtime.dispatchFetch("https://example.com/dia/" + edition.date)
   ).text();
   assert.equal((html.match(/data-rail-row/g) || []).length, 1);
-  assert.ok(html.includes('data-idle-swing="5000"'));
-  assert.ok(html.includes('class="rail-edge rail-edge-prev"'));
+  assert.ok(!html.includes("data-idle-swing"));
+  assert.ok(!html.includes("rail-edge"));
   assert.ok(html.includes("creator-badge"));
   const css = await (
     await runtime.dispatchFetch("https://example.com/style.css")
@@ -221,4 +220,11 @@ test("public catalog renders rows, collapsed equal cards and no overlay preview 
   assert.ok(css.includes("--card-w"));
   assert.ok(css.includes("-webkit-line-clamp: 2"));
   assert.ok(css.includes("prefers-reduced-motion"));
+});
+
+test("meaningful() rejects text without letters or digits", async () => {
+  const { meaningful } = await import("../src/model");
+  assert.throws(() => meaningful("…"));
+  assert.throws(() => meaningful("  - "));
+  assert.equal(meaningful("Clip 1"), "Clip 1");
 });

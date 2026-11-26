@@ -144,7 +144,7 @@ export const previewScript = `
         if(!result)throw Error('unavailable');
         status.textContent='X post. Use its controls; playback and availability are not guaranteed.';
       }
-    } catch { if(active===entry){mount.remove();status.textContent=name(entry.el)+' no disponible. Abre el original.';} }
+    } catch { if(active===entry){mount.remove();status.textContent=name(entry.el)+' unavailable. Open the original.';} }
   };
   const handoff = (event, el, layer) => {
     if (event.pointerType !== 'mouse' || document.fullscreenElement || fullscreenSession) return;
@@ -227,11 +227,11 @@ export const previewScript = `
     }
     const floating = makeLayer(el);
     if (!floating) {
-      el.querySelector('.preview-status').textContent = 'No hay espacio para el reproductor completo. Abre el original.'; return;
+      el.querySelector('.preview-status').textContent = 'Not enough room for the full player. Open the original.'; return;
     }
     const {layer, stage, anchor} = floating;
     const entry = {el, layer, stage, animation: null}; active = entry; mark(el, true);
-    el.querySelector('.preview-status').textContent = 'Abriendo vista previa.';
+    el.querySelector('.preview-status').textContent = 'Opening preview.';
     if (manual) layer.querySelector('[data-preview-close]').focus({preventScroll: true});
     if (reduced.matches) { finish(entry); return; }
     const box = layer.getBoundingClientRect();
@@ -280,7 +280,7 @@ export const previewScript = `
     }
   }, {threshold: [0, .5, 1]});
   for (const el of owners) observer.observe(el);
-  addEventListener('scroll', event => { if (event.target?.dataset?.autoScroll) return; if (active && provider(active.el) === 'x' && inside(active.stage,event.target)) return; if (document.fullscreenElement || fullscreenSession) return; clearTimers(); if (active?.layer) stop({animate: false}); else check(); }, {passive: true, capture: true});
+  addEventListener('scroll', event => { if (active && provider(active.el) === 'x' && inside(active.stage,event.target)) return; if (document.fullscreenElement || fullscreenSession) return; clearTimers(); if (active?.layer) stop({animate: false}); else check(); }, {passive: true, capture: true});
   addEventListener('resize', () => { if (document.fullscreenElement || fullscreenSession) return; clearTimers(); if (active?.layer) stop({animate: false}); else check(); });
   document.addEventListener('fullscreenchange', () => {
     if (document.fullscreenElement) { fullscreenSession = true; clearTimers(); }

@@ -201,7 +201,12 @@ test("controles de escritura y XSS en el navegador móvil", async ({
     await d.dismiss();
   });
   await page.goto("/dia/" + edition.date);
-  await expect(page.locator("h1")).toHaveText(edition.title);
+  await expect(page.locator("h1")).toHaveText(
+    (
+      edition.clips.find((c) => c.url.endsWith(edition.featured)) ??
+      edition.clips[0]
+    ).title,
+  );
   await expect(page.locator("main script, main img, main svg")).toHaveCount(0);
   expect(dialog).toBe(false);
   expect(
@@ -359,7 +364,12 @@ test("catálogo visual: miniaturas, reproducción, búsqueda y navegación en m�
   await expect(page.getByLabel("Find a clip or a creator")).toBeInViewport();
   await page.goto("/dia/" + edition.date);
   await expect(page.locator(".catalog-card")).toHaveCount(5);
-  await expect(page.locator(".billboard h1")).toHaveText(edition.title);
+  await expect(page.locator(".billboard h1")).toHaveText(
+    (
+      edition.clips.find((c) => c.url.endsWith(edition.featured)) ??
+      edition.clips[0]
+    ).title,
+  );
   await expect(
     page.locator(".billboard .featured-credit:visible"),
   ).toContainText("Creador catálogo 2");

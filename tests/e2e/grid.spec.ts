@@ -99,7 +99,7 @@ test("10 clips become 3 rows (4/3/3) with identical card sizes", async ({
   await ctx.close();
 });
 
-test("hovering the row edge scrolls it; idle rows swing and return", async ({
+test("rows never auto-scroll and pointer devices get visible arrows", async ({
   browser,
   request,
 }) => {
@@ -110,63 +110,23 @@ test("hovering the row edge scrolls it; idle rows swing and return", async ({
   const rail = page.locator("#clips-rail");
   await rail.scrollIntoViewIfNeeded();
   const left = () => rail.evaluate((el) => el.scrollLeft);
-  // Idle swing: starts without any interaction after ~5 s, then returns.
-  await expect.poll(left, { timeout: 12000 }).toBeGreaterThan(40);
-  await expect.poll(left, { timeout: 15000 }).toBeLessThan(2);
-  // Edge zone: mouse near the right edge scrolls the row.
-  const box = (await page.locator("#clips-rail").boundingBox())!;
+  // No idle swing and no edge-hover scrolling.
+  await page.waitForTimeout(6500);
+  expect(await left()).toBe(0);
+  const box = (await rail.boundingBox())!;
   await page.mouse.move(box.x + box.width - 20, box.y + 40);
-  await expect.poll(left, { timeout: 5000 }).toBeGreaterThan(200);
-  await page.mouse.move(box.x + box.width / 2, box.y - 60);
-  const rest = await left();
-  await page.waitForTimeout(300);
-  expect(Math.abs((await left()) - rest)).toBeLessThan(30);
-  // Hidden but present controls keep working for keyboard users.
-  await page
-    .getByRole("button", { name: "Previous clips (row 1 of 3)" })
-    .dispatchEvent("click");
-  await expect.poll(left, { timeout: 5000 }).toBeLessThan(rest);
-  await ctx.close();
-});
-
-test("prefers-reduced-motion disables the idle swing", async ({
-  browser,
-  request,
-}) => {
-  await seed(request, "2096-01-03", 10);
-  const ctx = await open(browser, "reduce", 800);
-  const page = await ctx.newPage();
-  await page.goto("/dia/2096-01-03");
-  await page.locator("#clips-rail").scrollIntoViewIfNeeded();
-  await page.waitForTimeout(7500);
-  expect(
-    await page.locator("#clips-rail").evaluate((el) => el.scrollLeft),
-  ).toBe(0);
-  await ctx.close();
-});
-
-test("switching reduced motion on stops active edge scrolling", async ({
-  browser,
-  request,
-}) => {
-  await seed(request, "2096-01-04", 10);
-  const ctx = await open(browser, "no-preference", 800);
-  const page = await ctx.newPage();
-  await page.goto("/dia/2096-01-04");
-  const rail = page.locator("#clips-rail");
-  await rail.scrollIntoViewIfNeeded();
-  const edge = page
-    .locator("[data-rail-row]")
-    .first()
-    .locator('[data-edge="1"]');
-  await edge.dispatchEvent("pointerenter", { pointerType: "mouse" });
-  await expect
-    .poll(() => rail.evaluate((e) => e.scrollLeft))
-    .toBeGreaterThan(10);
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.waitForTimeout(100);
-  const position = await rail.evaluate((e) => e.scrollLeft);
-  await page.waitForTimeout(350);
-  expect(await rail.evaluate((e) => e.scrollLeft)).toBe(position);
+  await page.waitForTimeout(500);
+  expect(await left()).toBe(0);
+  // Visible arrow scrolls the row on click.
+  const next = page.getByRole("button", { name: "Next clips (row 1 of 3)" });
+  await expect(next).toBeVisible();
+  await next.click();
+  await expect.poll(left, { timeout: 5000 }).toBeGreaterThan(100);
+  const prev = page.getByRole("button", {
+    name: "Previous clips (row 1 of 3)",
+  });
+  await expect(prev).toBeVisible();
+  await prev.click();
+  await expect.poll(left, { timeout: 5000 }).toBeLessThan(2);
   await ctx.close();
 });

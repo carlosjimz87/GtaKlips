@@ -16,15 +16,13 @@ const descriptions: Record<string, string> = {
   Reacciones: "Live, unfiltered.",
 };
 /**
- * Public grid layout. Tune here: number of carousel rows, clips per row, and
- * the idle time before a row hints at more clips with a gentle swing.
+ * Public grid layout. Tune here: number of carousel rows and clips per row.
  */
 export const catalogConfig = {
   ROWS: 3,
   VIDEOS_PER_ROW: 6,
   // Editions hold at most 10 clips: never split into rows shorter than this.
   MIN_VIDEOS_PER_ROW: 3,
-  IDLE_SWING_MS: 5000,
 } as const;
 /**
  * Splits clips (in order) over up to `rows` rows of about `perRow` clips each.
@@ -86,7 +84,7 @@ function card(c: Clip, e: Edition): string {
 function rail(clips: Clip[], e: Edition, i: number, total: number): string {
   const id = i ? `clips-rail-${i + 1}` : "clips-rail",
     label = total > 1 ? ` (row ${i + 1} of ${total})` : "";
-  return `<div class="rail-row" data-rail-row><div class="rail-controls rail-sr" hidden><button type="button" data-rail="${id}" data-direction="-1" aria-label="Previous clips${label}">Previous</button><button type="button" data-rail="${id}" data-direction="1" aria-label="Next clips${label}">Next</button></div><div class="catalog-rail" id="${id}" tabindex="0" aria-label="Clips in this selection${label}">${clips.map((c) => card(c, e)).join("")}</div><span class="rail-edge rail-edge-prev" data-edge="-1" aria-hidden="true"></span><span class="rail-edge rail-edge-next" data-edge="1" aria-hidden="true"></span></div>`;
+  return `<div class="rail-row" data-rail-row><div class="rail-controls rail-sr" hidden><button type="button" data-rail="${id}" data-direction="-1" aria-label="Previous clips${label}"><span aria-hidden="true">‹</span></button><button type="button" data-rail="${id}" data-direction="1" aria-label="Next clips${label}"><span aria-hidden="true">›</span></button></div><div class="catalog-rail" id="${id}" tabindex="0" aria-label="Clips in this selection${label}">${clips.map((c) => card(c, e)).join("")}</div></div>`;
 }
 export function editionView(
   e: Edition,
@@ -108,6 +106,10 @@ export function editionView(
         ).includes(normalize(q))),
   );
   const rows = distributeRows(filtered);
+  // Empty categories are dead ends: only offer those that have clips (plus the active one).
+  const available = categories.filter(
+    (c) => e.clips.some((clip) => clip.category === c) || c === category,
+  );
   const featured = e.clips.find((c) => c.id === e.featured) || e.clips[0];
   const date = new Intl.DateTimeFormat("en-US", {
     dateStyle: "long",
@@ -120,9 +122,10 @@ export function editionView(
     return `<section class="empty-state"><p class="eyebrow">GtaKlips · ${esc(date)}</p><h1>${esc(e.title)}</h1><p class="lead">No clips are available in this selection.</p>${demo}<a class="button primary" href="/archivo">Explore the archive</a></section>`;
   const link = source(featured.url),
     name = providerName(link.provider);
-  return `<section class="billboard ${category || q ? "billboard-compact" : ""}" aria-label="Featured clip"><div class="billboard-art"><div class="hero-placeholder" aria-hidden="true">GK</div>${poster(featured, true)}</div><div class="billboard-shade"></div><div class="billboard-content"><p class="eyebrow"><span class="live-mark" aria-hidden="true"></span>EDITION · <time datetime="${e.date}">${esc(date)}</time></p><div class="edition-tags"><span>GTA VI</span><span>${e.clips.length} ${e.clips.length === 1 ? "clip" : "clips"} with context</span><span>Curated in English</span></div><h1>${esc(e.title)}</h1><p class="billboard-description">${esc(e.intro)}</p><div class="edition-signature"><span>${String(e.clips.length).padStart(2, "0")}</span><p>${e.clips.length === 1 ? "moment picked" : "moments picked"}.<br>With context and credit.</p></div><div class="featured-mobile"><p class="eyebrow">FEATURED</p><p class="featured-credit"><strong>${esc(featured.title)}</strong><br>${esc(credit(featured))} · ${name}</p></div><div class="billboard-actions"><a class="button primary play-primary" data-source href="${esc(featured.url)}" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">▶</span> Play on ${name}</a><a class="button secondary" href="#seleccion">Explore selection</a></div><p class="playback-note">${link.provider === "x" ? "Tap Preview to load the official X post." : "Preview starts muted on desktop when supported."} You can always open the original.</p><button class="share-edition" type="button" data-share-edition hidden>Copy edition link <span aria-hidden="true">↗</span></button><span class="share-status" role="status" aria-live="polite"></span></div><div class="hero-preview" data-provider="${link.provider}" data-source-url="${esc(link.url)}" data-orientation="${esc(featured.orientation || "auto")}" data-preview="${esc(link.sourceId)}" data-preview-title="${esc(featured.title)}" data-preview-hero><div class="preview-heading"><p class="eyebrow">FEATURED <span>${String(e.clips.indexOf(featured) + 1).padStart(2, "0")} / ${String(e.clips.length).padStart(2, "0")}</span></p><h2>${esc(featured.title)}</h2><p class="featured-credit"><strong>${esc(credit(featured))}</strong> · ${name}</p></div><div class="preview-stage">${poster(featured)}<span class="preview-placeholder">${esc(featured.title)}<small>FEATURED ON ${name.toUpperCase()}</small></span></div><div class="preview-toolbar" hidden><button type="button" data-preview-toggle aria-pressed="false">Preview</button><span class="preview-status" role="status"></span></div><a class="preview-source" href="${esc(featured.url)}" target="_blank" rel="noopener noreferrer">Open original on ${name}</a></div><span class="billboard-index" aria-hidden="true">GTAKLIPS / LIVE, IN A FEW MOMENTS</span></section><div class="catalog-body">${demo}<section class="catalog-section" id="seleccion"><div class="section-heading"><div><p class="eyebrow">THE SELECTION / ${String(e.clips.length).padStart(2, "0")} MOMENTS</p><h2>${q ? "Search results" : category ? esc(categoryLabels[category] || category) : "Hit the next moment."}</h2></div></div><div class="discovery-toolbar"><nav class="filters" aria-label="Categories">${["Todos", ...categories].map((c) => `<a href="${esc(editionURL(e, c === "Todos" ? undefined : c, q))}" ${(!category && c === "Todos") || category === c ? 'aria-current="page"' : ""}>${c === "Todos" ? "All" : categoryLabels[c]}</a>`).join("")}</nav><form class="catalog-search" id="buscar" tabindex="-1" role="search" action="/dia/${e.date}" method="get"><label for="clip-search">Find a clip or a creator</label><div><input id="clip-search" name="q" type="search" maxlength="80" placeholder="Search this selection" value="${esc(q)}">${category ? `<input type="hidden" name="categoria" value="${esc(category)}">` : ""}<button type="submit">Search</button></div></form></div><p class="result-count">${filtered.length} ${filtered.length === 1 ? "clip available" : "clips available"}${q ? ` for “${esc(q)}”` : ""}</p>${filtered.length ? `<div class="catalog-rows" data-idle-swing="${catalogConfig.IDLE_SWING_MS}">${rows.map((row, i) => rail(row, e, i, rows.length)).join("")}</div>` : `<div class="empty-results"><span class="eyebrow">TRY A DIFFERENT ANGLE</span><h3>No clips match that selection.</h3><p>Try another search or explore the full edition.</p><a class="button secondary" href="${esc(editionURL(e))}">Clear filters</a></div>`}</section>${
+  return `<section class="billboard ${category || q ? "billboard-compact" : ""}" aria-label="Featured clip"><div class="billboard-art"><div class="hero-placeholder" aria-hidden="true">GK</div>${poster(featured, true)}</div><div class="billboard-shade"></div><div class="billboard-content"><p class="eyebrow"><span class="live-mark" aria-hidden="true"></span>EDITION · <time datetime="${e.date}">${esc(date)}</time> · ${esc(e.title)}</p><div class="edition-tags"><span>GTA VI</span><span>${e.clips.length} ${e.clips.length === 1 ? "clip" : "clips"} with context</span><span>Curated in English</span></div><h1>${esc(featured.title)}</h1><p class="billboard-description">${esc(featured.text)}</p><div class="featured-mobile"><p class="eyebrow">FEATURED</p><p class="featured-credit"><strong>${esc(featured.title)}</strong><br>${esc(credit(featured))} · ${name}</p></div><div class="billboard-actions"><a class="button primary play-primary" data-source href="${esc(featured.url)}" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">▶</span> Play on ${name}</a><a class="text-link" href="#seleccion">Explore selection</a></div></div><div class="hero-preview" data-provider="${link.provider}" data-source-url="${esc(link.url)}" data-orientation="${esc(featured.orientation || "auto")}" data-preview="${esc(link.sourceId)}" data-preview-title="${esc(featured.title)}" data-preview-hero><div class="preview-heading"><p class="eyebrow">FEATURED <span>${String(e.clips.indexOf(featured) + 1).padStart(2, "0")} / ${String(e.clips.length).padStart(2, "0")}</span></p><h2>${esc(featured.title)}</h2><p class="featured-credit"><strong>${esc(credit(featured))}</strong> · ${name}</p></div><div class="preview-stage">${poster(featured)}<span class="preview-placeholder">${esc(featured.title)}<small>FEATURED ON ${name.toUpperCase()}</small></span></div><div class="preview-toolbar" hidden><button type="button" data-preview-toggle aria-pressed="false">Preview</button><span class="preview-status" role="status"></span></div><a class="preview-source" href="${esc(featured.url)}" target="_blank" rel="noopener noreferrer">Open original on ${name}</a></div><span class="billboard-index" aria-hidden="true">GTAKLIPS / LIVE, IN A FEW MOMENTS</span></section><div class="catalog-body">${demo}<section class="catalog-section" id="seleccion"><div class="section-heading"><div><p class="eyebrow">THE SELECTION / ${String(e.clips.length).padStart(2, "0")} MOMENTS</p><h2>${q ? "Search results" : category ? esc(categoryLabels[category] || category) : "Hit the next moment."}</h2>${!q && !category ? `<p class="section-intro">${esc(e.intro)}</p>` : ""}</div><div class="section-tools"><button class="share-edition" type="button" data-share-edition hidden>Copy edition link <span aria-hidden="true">↗</span></button><span class="share-status" role="status" aria-live="polite"></span></div></div><div class="discovery-toolbar"><nav class="filters" aria-label="Categories">${["Todos", ...available].map((c) => `<a href="${esc(editionURL(e, c === "Todos" ? undefined : c, q))}" ${(!category && c === "Todos") || category === c ? 'aria-current="page"' : ""}>${c === "Todos" ? "All" : categoryLabels[c]}</a>`).join("")}</nav><form class="catalog-search" id="buscar" tabindex="-1" role="search" action="/dia/${e.date}" method="get"><label for="clip-search">Find a clip or a creator</label><div><input id="clip-search" name="q" type="search" maxlength="80" placeholder="Search this selection" value="${esc(q)}">${category ? `<input type="hidden" name="categoria" value="${esc(category)}">` : ""}<button type="submit">Search</button></div></form></div><p class="result-count">${filtered.length} ${filtered.length === 1 ? "clip available" : "clips available"}${q ? ` for “${esc(q)}”` : ""}</p>${filtered.length ? `<div class="catalog-rows">${rows.map((row, i) => rail(row, e, i, rows.length)).join("")}</div>` : `<div class="empty-results"><span class="eyebrow">TRY A DIFFERENT ANGLE</span><h3>No clips match that selection.</h3><p>Try another search or explore the full edition.</p><a class="button secondary" href="${esc(editionURL(e))}">Clear filters</a></div>`}</section>${
     !category && !q
       ? `<section class="catalog-section genre-section"><div class="section-heading"><div><p class="eyebrow">FOLLOW YOUR CURIOSITY</p><h2>What do you feel like watching?</h2></div><a class="text-link" href="/archivo">All editions</a></div><div class="genre-grid">${categories
+          .filter((c) => e.clips.some((clip) => clip.category === c))
           .map((c) => {
             const sample = e.clips.find((clip) => clip.category === c);
             return `<a class="genre-card genre-${c.toLowerCase()}" href="${esc(editionURL(e, c))}">${sample ? poster(sample) : ""}<span><strong>${categoryLabels[c]}</strong><small>${descriptions[c]}</small></span></a>`;
@@ -158,59 +161,16 @@ for (const img of document.querySelectorAll('img[data-poster]')) {
   if (img.complete && !img.naturalWidth) fallback();
 }
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const finePointer = matchMedia('(hover: hover) and (pointer: fine)');
-const idleMs = Number(document.querySelector('[data-idle-swing]')?.dataset.idleSwing) || 5000;
-document.querySelectorAll('[data-rail-row]').forEach((row, index) => {
+document.querySelectorAll('[data-rail-row]').forEach(row => {
   const rail = row.querySelector('.catalog-rail');
   const controls = row.querySelector('.rail-controls');
   const buttons = [...controls.querySelectorAll('[data-rail]')];
   controls.hidden = false;
-  let swing = null, idleTimer = null, edgeFrame = 0, edgeDir = 0, onScreen = false;
   const max = () => rail.scrollWidth - rail.clientWidth;
   const update = () => { buttons[0].disabled = rail.scrollLeft <= 1; buttons[1].disabled = rail.scrollLeft >= max() - 2; row.classList.toggle('can-prev', rail.scrollLeft > 1); row.classList.toggle('can-next', rail.scrollLeft < max() - 2); };
-  const cancelSwing = () => { if (!swing) return; cancelAnimationFrame(swing); swing = null; rail.style.scrollSnapType = ''; setTimeout(() => { if (!swing) delete rail.dataset.autoScroll; }, 200); };
-  const busy = () => !!document.querySelector('.card-preview-layer') || document.hidden;
-  const arm = () => {
-    clearTimeout(idleTimer); idleTimer = null;
-    if (reducedMotion.matches || !onScreen || max() < 8) return;
-    idleTimer = setTimeout(startSwing, idleMs + index * 700);
-  };
-  const touched = () => { cancelSwing(); arm(); };
-  const startSwing = () => {
-    idleTimer = null;
-    if (busy() || edgeDir || reducedMotion.matches || max() < 8) { arm(); return; }
-    // Hint at more clips: glide to the far end and come back.
-    const from = rail.scrollLeft, forward = from < max() / 2, to = forward ? max() : 0;
-    const total = Math.min(2600, 900 + Math.abs(to - from) * 0.9), t0 = performance.now();
-    const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    rail.style.scrollSnapType = 'none'; rail.dataset.autoScroll = '1';
-    const step = now => {
-      const t = Math.min(1, (now - t0) / (total * 2));
-      const p = t < .5 ? ease(t * 2) : 1 - ease((t - .5) * 2);
-      rail.scrollLeft = from + (to - from) * p;
-      if (busy()) { cancelSwing(); return; }
-      if (t < 1) swing = requestAnimationFrame(step); else { swing = null; rail.style.scrollSnapType = ''; setTimeout(() => { if (!swing) delete rail.dataset.autoScroll; }, 200); }
-    };
-    swing = requestAnimationFrame(step);
-  };
   for (const button of buttons) button.addEventListener('click', () => rail.scrollBy({left: Number(button.dataset.direction) * rail.clientWidth * .8, behavior: reducedMotion.matches ? 'auto' : 'smooth'}));
   rail.addEventListener('scroll', update, {passive: true});
-  addEventListener('resize', () => { update(); arm(); });
-  for (const type of ['pointermove', 'pointerdown', 'wheel', 'touchstart', 'focusin', 'keydown']) row.addEventListener(type, touched, {passive: true});
-  // Edge zones: hovering near either end of a row scrolls it smoothly.
-  const tick = () => {
-    if (!edgeDir) return;
-    rail.scrollLeft += edgeDir * 9;
-    if ((edgeDir < 0 && rail.scrollLeft <= 0) || (edgeDir > 0 && rail.scrollLeft >= max() - 1)) { edgeDir = 0; rail.style.scrollSnapType = ''; return; }
-    edgeFrame = requestAnimationFrame(tick);
-  };
-  for (const edge of row.querySelectorAll('[data-edge]')) {
-    edge.addEventListener('pointerenter', event => { if (event.pointerType !== 'mouse' || reducedMotion.matches || document.querySelector('.card-preview-layer')) return; cancelSwing(); rail.style.scrollSnapType = 'none'; edgeDir = Number(edge.dataset.edge); cancelAnimationFrame(edgeFrame); edgeFrame = requestAnimationFrame(tick); });
-    edge.addEventListener('pointerleave', () => { edgeDir = 0; rail.style.scrollSnapType = ''; cancelAnimationFrame(edgeFrame); arm(); });
-  }
-  new IntersectionObserver(entries => { onScreen = entries.at(-1).isIntersecting; if (onScreen) arm(); else { clearTimeout(idleTimer); cancelSwing(); } }, {threshold: .4}).observe(row);
-  reducedMotion.addEventListener('change', () => { if (reducedMotion.matches) { cancelSwing(); clearTimeout(idleTimer); edgeDir = 0; cancelAnimationFrame(edgeFrame); rail.style.scrollSnapType = ''; } else arm(); });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { clearTimeout(idleTimer); cancelSwing(); edgeDir = 0; cancelAnimationFrame(edgeFrame); rail.style.scrollSnapType = ''; } else arm(); });
+  addEventListener('resize', update);
   update();
 });
 `;
