@@ -10,6 +10,7 @@ import {
 import { inboxPage, inboxScript } from "./inbox-admin";
 import { editionView, emptyView, catalogScript } from "./catalog";
 import { importTwitch, type Candidate } from "./importer";
+import { importYouTube } from "./youtube-importer";
 import { importPage, importScript } from "./import-admin";
 import { authorized, type Env } from "./auth";
 import { dateValid, esc, post, type Edition } from "./model";
@@ -586,6 +587,11 @@ export default {
     env: Env,
     ctx: ExecutionContext,
   ) {
-    ctx.waitUntil(importTwitch(env, "cron"));
+    ctx.waitUntil(
+      Promise.allSettled([
+        importTwitch(env, "cron"),
+        importYouTube(env, "cron"),
+      ]),
+    );
   },
 };

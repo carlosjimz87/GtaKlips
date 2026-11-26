@@ -4,6 +4,7 @@ import { bridge, type BridgeEnv } from "./telegram-bridge";
 import { handle } from "./index";
 import { loopback } from "./auth";
 import { importTwitch } from "./importer";
+import { importYouTube } from "./youtube-importer";
 export default {
   fetch(request: Request, env: BridgeEnv) {
     const url = new URL(request.url);
@@ -27,6 +28,11 @@ export default {
     env: BridgeEnv,
     ctx: ExecutionContext,
   ) {
-    ctx.waitUntil(importTwitch(env, "cron"));
+    ctx.waitUntil(
+      Promise.allSettled([
+        importTwitch(env, "cron"),
+        importYouTube(env, "cron"),
+      ]),
+    );
   },
 };
