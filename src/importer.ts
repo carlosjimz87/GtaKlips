@@ -159,7 +159,7 @@ function candidate(
     const created = Date.parse(v.created_at);
     if (
       !Number.isFinite(created) ||
-      created < start ||
+      created < start - 3600000 || // Twitch can return clips minutes before started_at
       created > end ||
       !Number.isSafeInteger(v.view_count) ||
       v.view_count < 0 ||
@@ -189,7 +189,11 @@ function candidate(
       ...link,
       thumbnail: image,
       streamer: str(v.broadcaster_name, 80),
-      title: str(v.title, 120),
+      // Real clip titles can exceed 120 chars or be blank: truncate / fall back.
+      title:
+        typeof v.title === "string" && v.title.trim()
+          ? Array.from(v.title.trim()).slice(0, 120).join("")
+          : str(v.broadcaster_name, 80),
       language: v.language,
       game_id: game,
       created_at: new Date(created).toISOString(),

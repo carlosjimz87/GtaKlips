@@ -3,6 +3,7 @@ import { enrichmentBridge } from "./enrichment";
 import { bridge, type BridgeEnv } from "./telegram-bridge";
 import { handle } from "./index";
 import { loopback } from "./auth";
+import { importTwitch } from "./importer";
 export default {
   fetch(request: Request, env: BridgeEnv) {
     const url = new URL(request.url);
@@ -20,5 +21,12 @@ export default {
       return bridge(request, env);
     }
     return handle(request, env, enabled);
+  },
+  async scheduled(
+    _controller: ScheduledController,
+    env: BridgeEnv,
+    ctx: ExecutionContext,
+  ) {
+    ctx.waitUntil(importTwitch(env, "cron"));
   },
 };
