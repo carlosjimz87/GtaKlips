@@ -10,6 +10,9 @@ const form = root.querySelector('.catalog-search');
 const sort = root.querySelector('[name=sort]');
 const links = [...root.querySelectorAll('.filters a')];
 const count = root.querySelector('.result-count');
+const calm=matchMedia('(prefers-reduced-motion: reduce)').matches||(navigator.connection&&navigator.connection.saveData);
+if(calm)document.documentElement.setAttribute('data-calm','');
+else if('IntersectionObserver' in window){const io=new IntersectionObserver((entries)=>{let i=0;for(const entry of entries){if(!entry.isIntersecting)continue;entry.target.style.setProperty('--reveal-i',String(Math.min(i++,8)));entry.target.classList.add('revealed');io.unobserve(entry.target);}},{rootMargin:'0px 0px -6% 0px',threshold:0.05});grid.classList.add('js-reveal');for(const card of cards)io.observe(card);}
 const empty = root.querySelector('.empty-results');
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
 const normalize = s => s.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('en');

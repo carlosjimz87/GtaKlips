@@ -121,5 +121,11 @@ export const designCss = `
  .public-page .footer-main { grid-template-columns:1fr; }
 }
 @media(max-width:480px) { .public-page .catalog-grid { grid-template-columns:minmax(0,1fr); }.public-page .catalog-card .clip-info h2 { font-size:17px; }.public-page .catalog-card .creator { font-size:12px; }.public-page .catalog-search { flex-basis:100%; }.public-page header nav a { padding-inline:8px; } }
-@media(prefers-reduced-motion:reduce) { .public-page *, .public-page *::before,.public-page *::after { scroll-behavior:auto !important; transition:none !important; animation:none !important; }.public-page .catalog-card:hover .poster { transform:none; } }
+.public-page .cinema { position:relative; isolation:isolate; }
+.public-page .cinema::before { content:""; position:absolute; inset:0 0 auto; height:min(80%,620px); z-index:-1; pointer-events:none; background:radial-gradient(40% 55% at 20% 30%,#d8ff6526,transparent 70%),radial-gradient(35% 50% at 80% 20%,#5b8cff22,transparent 70%),radial-gradient(45% 60% at 55% 80%,#ff5bd01a,transparent 70%); background-size:140% 140%; animation:aurora 24s ease-in-out infinite alternate; -webkit-mask-image:linear-gradient(#000 40%,transparent); mask-image:linear-gradient(#000 40%,transparent); }
+html[data-calm] .public-page .cinema::before { animation:none; }
+@keyframes aurora { from { background-position:0% 0%; } to { background-position:100% 60%; } }
+.public-page .catalog-grid.js-reveal .catalog-card:not(.revealed) { opacity:0; transform:translateY(18px); }
+.public-page .catalog-grid.js-reveal .catalog-card { transition:opacity 480ms ease,transform 480ms cubic-bezier(.2,.7,.2,1); transition-delay:calc(var(--reveal-i,0)*45ms); }
+@media(prefers-reduced-motion:reduce) { .public-page *, .public-page *::before,.public-page *::after { scroll-behavior:auto !important; transition:none !important; animation:none !important; }.public-page .catalog-card:hover .poster { transform:none; }.public-page .cinema::before { animation:none; }.public-page .catalog-grid.js-reveal .catalog-card:not(.revealed) { opacity:1; transform:none; } }
 `;
