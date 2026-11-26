@@ -804,6 +804,60 @@ test("valid optional Twitch posters persist and an invalid replacement preserves
   }
 });
 
+test("TWITCH_MIN_VIEWS keeps low-view clips out of the review queue without failing the run", async () => {
+  const transport = mock.method(globalThis, "fetch", async (input: any) => {
+    const url = new URL(String(input));
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), {
+        headers: { "Content-Type": "application/json" },
+      });
+    if (url.hostname === "id.twitch.tv")
+      return json({
+        access_token: "fixture-floor-token",
+        token_type: "bearer",
+        expires_in: 3600,
+      });
+    if (url.pathname === "/helix/games")
+      return json({ data: [{ id: "123456", name: "Grand Theft Auto VI" }] });
+    const make = (id: string, view_count: number) => ({
+      id,
+      url: "https://clips.twitch.tv/" + id,
+      broadcaster_name: "Floor creator",
+      title: "t",
+      language: "es",
+      game_id: "123456",
+      created_at: new Date(Date.now() - 1000).toISOString(),
+      duration: 25,
+      view_count,
+    });
+    return json({
+      data: [make("FloorLow", 10), make("FloorHigh", 500)],
+      pagination: {},
+    });
+  });
+  try {
+    const env = {
+      DB: db as unknown as Env["DB"],
+      PUBLIC_ORIGIN: base,
+      TWITCH_CLIENT_ID: "fixture-client",
+      TWITCH_CLIENT_SECRET: secret,
+      TWITCH_MIN_VIEWS: "100",
+    };
+    const result = await importTwitch(env, "manual");
+    assert.equal(result.status, "success");
+    assert.equal(result.found, 2);
+    assert.equal(result.saved, 1);
+    const ids = (
+      await db
+        .prepare("SELECT id FROM candidates WHERE id LIKE 'Floor%'")
+        .all<any>()
+    ).results.map((r) => r.id);
+    assert.deepEqual(ids, ["FloorHigh"]);
+  } finally {
+    transport.mock.restore();
+  }
+});
+
 test("manual-first Twitch capture is not duplicated or revived by later imports", async () => {
   // The fixture's normal API response contains ImportDemo; use its existing row
   // only after saving and restoring it so earlier acceptance remains unchanged.

@@ -407,9 +407,12 @@ export async function importTwitch(
       )
         fail("malformed");
       run.found += result.data.length;
-      const clips: Omit<Candidate, "review_state">[] = result.data.map(
-        (v: unknown) => candidate(v, run.game_id!, now - 86400000, now),
-      );
+      // Optional quality floor (TWITCH_MIN_VIEWS): every clip is still validated,
+      // but low-view noise is not queued for review. Unset/0 keeps everything.
+      const minViews = Math.max(0, Number(env.TWITCH_MIN_VIEWS) || 0);
+      const clips: Omit<Candidate, "review_state">[] = result.data
+        .map((v: unknown) => candidate(v, run.game_id!, now - 86400000, now))
+        .filter((c: Omit<Candidate, "review_state">) => c.views >= minViews);
       // A manually captured source already has a canonical private review record.
       // Do not create another candidate or revive a discarded manual source.
       // pageSize is fixed at 100: this query stays within D1's 100 bindings.

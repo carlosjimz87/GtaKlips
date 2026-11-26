@@ -4,6 +4,7 @@ export interface Env {
   TWITCH_CLIENT_ID?: string;
   TWITCH_CLIENT_SECRET?: string;
   TWITCH_GAME_ID?: string;
+  TWITCH_MIN_VIEWS?: string;
   YOUTUBE_API_KEY?: string;
   PUBLIC_ORIGIN: string;
   ACCESS_ISSUER?: string;
