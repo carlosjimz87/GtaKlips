@@ -423,6 +423,9 @@ test("immersive cards keep neighbours reachable and adapt to portrait playback",
     await retry.click();
     await expect(retry).toBeHidden();
     await expect(layer).toHaveAttribute("data-playback", "playing");
+    // Leave the card first: on slow runners the layout shift after Escape
+    // re-fires pointerenter under a stationary pointer and reopens the layer.
+    await page.mouse.move(5, 5);
     await page.keyboard.press("Escape");
     await expect(layer).toHaveCount(0);
     await page.mouse.move(5, 5);
