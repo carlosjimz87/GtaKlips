@@ -159,7 +159,7 @@ function candidate(
     const created = Date.parse(v.created_at);
     if (
       !Number.isFinite(created) ||
-      created < start ||
+      created < start - 3600000 || // Twitch can return clips minutes before started_at
       created > end ||
       !Number.isSafeInteger(v.view_count) ||
       v.view_count < 0 ||
@@ -189,7 +189,11 @@ function candidate(
       ...link,
       thumbnail: image,
       streamer: str(v.broadcaster_name, 80),
-      title: str(v.title, 120),
+      // Real clip titles can exceed 120 chars or be blank: truncate / fall back.
+      title:
+        typeof v.title === "string" && v.title.trim()
+          ? Array.from(v.title.trim()).slice(0, 120).join("")
+          : str(v.broadcaster_name, 80),
       language: v.language,
       game_id: game,
       created_at: new Date(created).toISOString(),
@@ -403,9 +407,12 @@ export async function importTwitch(
       )
         fail("malformed");
       run.found += result.data.length;
-      const clips: Omit<Candidate, "review_state">[] = result.data.map(
-        (v: unknown) => candidate(v, run.game_id!, now - 86400000, now),
-      );
+      // Optional quality floor (TWITCH_MIN_VIEWS): every clip is still validated,
+      // but low-view noise is not queued for review. Unset/0 keeps everything.
+      const minViews = Math.max(0, Number(env.TWITCH_MIN_VIEWS) || 0);
+      const clips: Omit<Candidate, "review_state">[] = result.data
+        .map((v: unknown) => candidate(v, run.game_id!, now - 86400000, now))
+        .filter((c: Omit<Candidate, "review_state">) => c.views >= minViews);
       // A manually captured source already has a canonical private review record.
       // Do not create another candidate or revive a discarded manual source.
       // pageSize is fixed at 100: this query stays within D1's 100 bindings.
