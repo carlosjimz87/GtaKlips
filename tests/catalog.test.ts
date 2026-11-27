@@ -106,8 +106,12 @@ test("public catalog exposes credited sources, real anchor targets and restricte
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.equal((html.match(/<article class=/g) || []).length, 5);
+  assert.equal(
+    (html.match(/<article class="[^"]*"[^>]*\shidden>/g) || []).length,
+    0,
+  );
   assert.ok(html.includes('id="clip-Catalog2"'));
-  assert.ok(html.includes("Play on Twitch"));
+  assert.ok(html.includes("Play clip"));
   assert.ok(html.includes("https://clips.twitch.tv/Catalog2"));
   assert.ok(html.includes("Creador 2"));
   assert.ok(html.includes("DEMO"));
@@ -132,7 +136,8 @@ test("search and categories combine without changing canonical or exposing unpub
         "?categoria=Jugadas&q=Creador%202",
     )
   ).text();
-  assert.equal((html.match(/<article class=/g) || []).length, 1);
+  assert.equal((html.match(/<article class=/g) || []).length, 5);
+  assert.equal((html.match(/<article [^>]*\shidden>/g) || []).length, 4);
   assert.ok(html.includes('id="clip-Catalog2"'));
   assert.ok(html.includes(`href="https://example.com/dia/${edition.date}"`));
   html = await (
@@ -140,7 +145,10 @@ test("search and categories combine without changing canonical or exposing unpub
       "https://example.com/dia/" + edition.date + "?q=%3Cscript%3E",
     )
   ).text();
-  assert.ok(html.includes("No clips match that selection"));
+  assert.ok(
+    html.includes("No clips found.") &&
+      !html.includes('class="empty-results" hidden'),
+  );
   assert.ok(!html.includes("<script>"));
   const db = await runtime.getD1Database("DB");
   await db
@@ -189,7 +197,6 @@ test("grid config: 3 rows of 6 by default, balanced distribution, no clip lost",
   const { catalogConfig, distributeRows } = await import("../src/catalog");
   assert.equal(catalogConfig.ROWS, 3);
   assert.equal(catalogConfig.VIDEOS_PER_ROW, 6);
-  assert.equal(catalogConfig.IDLE_SWING_MS, 5000);
   const n = (k: number) => Array.from({ length: k }, (_, i) => i);
   assert.equal(catalogConfig.MIN_VIDEOS_PER_ROW, 3);
   const sizes = (...args: Parameters<typeof distributeRows>) =>
@@ -207,18 +214,25 @@ test("grid config: 3 rows of 6 by default, balanced distribution, no clip lost",
   assert.deepEqual(distributeRows(n(4), 0, 0).flat(), n(4));
 });
 
-test("public catalog renders rows, collapsed equal cards and no overlay preview button", async () => {
+test("public catalog renders the cinema screen, equal-height cards and an accessible empty state", async () => {
   const html = await (
     await runtime.dispatchFetch("https://example.com/dia/" + edition.date)
   ).text();
-  assert.equal((html.match(/data-rail-row/g) || []).length, 1);
-  assert.ok(html.includes('data-idle-swing="5000"'));
-  assert.ok(html.includes('class="rail-edge rail-edge-prev"'));
-  assert.ok(html.includes("creator-badge"));
+  assert.equal((html.match(/data-preview-hero/g) || []).length, 1);
+  assert.equal((html.match(/class="clip catalog-card"/g) || []).length, 5);
+  assert.ok(!html.includes("data-idle-swing"));
+  assert.ok(html.includes("data-discovery"));
+  assert.ok(html.includes('class="empty-results" hidden'));
   const css = await (
     await runtime.dispatchFetch("https://example.com/style.css")
   ).text();
-  assert.ok(css.includes("--card-w"));
-  assert.ok(css.includes("-webkit-line-clamp: 2"));
+  assert.ok(css.includes("-webkit-line-clamp"));
   assert.ok(css.includes("prefers-reduced-motion"));
+});
+
+test("meaningful() rejects text without letters or digits", async () => {
+  const { meaningful } = await import("../src/model");
+  assert.throws(() => meaningful("…"));
+  assert.throws(() => meaningful("  - "));
+  assert.equal(meaningful("Clip 1"), "Clip 1");
 });

@@ -396,7 +396,7 @@ button:focus-visible {
 .public-page .source { display: inline-block; margin-top: 16px; color: #e8f4d0; font-size: 14px; font-weight: 700; }
 .source span { color: var(--lime); margin-left: 6px; }
 .genre-section { padding-top: 30px; border-top: 1px solid #39432d; }
-.genre-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 18px; }
+.genre-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 18px; }
 .genre-card { position: relative; isolation: isolate; display: flex; align-items: end; min-width: 0; min-height: 190px; overflow: hidden; border: 1px solid #4b573c; border-radius: 4px; text-decoration: none; background: #26381e; }
 .genre-card img { position: absolute; inset: 0; height: 100%; width: 100%; object-fit: cover; z-index: -2; opacity: .7; transition: transform .22s; }
 .genre-card::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg,#080e06fa,#080e0620); }
@@ -494,8 +494,11 @@ button:focus-visible {
 .preview-stage[data-orientation=portrait] > img { object-fit: contain; }
 .preview-stage[data-provider=youtube][data-orientation=portrait] iframe { width: 200px; left: 50%; transform: translateX(-50%); }
 .preview-stage[data-provider=x] { overflow: auto; }
-.preview-stage[data-provider=x] iframe { position: static; min-height: 0; color-scheme: dark; }
+.preview-stage[data-provider=x] iframe { position: static; min-height: 0; }
 .preview-stage[data-provider=x] > div { position: relative; z-index: 1; }
+.preview-stage[data-provider=x] .twitter-tweet { margin: 0 auto !important; }
+.preview-stage[data-provider=x] iframe { max-width: 100%; background: transparent; }
+.hero-preview .preview-stage[data-provider=x] { height: auto; min-height: 0; padding: 12px; max-height: min(640px,80vh); }
 @media (max-width:431px) {
  .hero-preview[data-provider=youtube], .hero-preview[data-provider=x] { display: block; min-width: 0; }
  .catalog-card[data-provider=youtube] .preview-toolbar, .catalog-card[data-provider=x] .preview-toolbar { display: flex; }
@@ -531,18 +534,24 @@ button:focus-visible {
 .catalog-card.previewing .poster::after { background: linear-gradient(transparent,#0b100899); }
 .card-preview-layer .fade-in, .hero-preview .fade-in { opacity: 0; transition: opacity .45s ease; }
 .card-preview-layer .fade-in.is-ready, .hero-preview .fade-in.is-ready { opacity: 1; }
-.rail-edge { position: absolute; top: 0; bottom: 18px; width: 56px; z-index: 5; display: none; opacity: 0; transition: opacity .25s; }
-.rail-edge-prev { left: -4px; background: linear-gradient(90deg,#090b0ccc,transparent); }
-.rail-edge-next { right: -4px; background: linear-gradient(270deg,#090b0ccc,transparent); }
-.rail-row.can-prev .rail-edge-prev, .rail-row.can-next .rail-edge-next { display: block; }
-.rail-row:hover .rail-edge { opacity: 1; }
 /* Visually hidden controls stay in the tab order and show up on keyboard focus. */
 .rail-sr, .catalog-card .preview-toolbar { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .rail-sr { display: flex; gap: 6px; }
 .rail-sr:focus-within { position: absolute; z-index: 6; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; top: -44px; right: 0; }
+/* Pointer devices get visible chevrons on the row edges; everyone else keeps the hidden buttons and native scrolling. */
+@media (hover:hover) and (pointer:fine) {
+  .rail-row .rail-controls.rail-sr, .rail-row .rail-controls.rail-sr:focus-within { display: contents; position: static; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; }
+  .public-page .rail-row .rail-controls button { position: absolute; top: calc(50% - 9px); z-index: 6; width: 44px; height: 44px; min-height: 0; padding: 0; transform: translateY(-50%); border-radius: 50%; border: 1px solid #56653f; background: #0b0f08e6; color: #f3f5e9; font-size: 26px; line-height: 1; opacity: 0; transition: opacity .2s, background-color .2s, border-color .2s; }
+  .public-page .rail-row .rail-controls button[data-direction="-1"] { left: 8px; }
+  .public-page .rail-row .rail-controls button[data-direction="1"] { right: 8px; }
+  .rail-row:hover .rail-controls button:not(:disabled), .rail-row:focus-within .rail-controls button:not(:disabled) { opacity: 1; }
+  .public-page .rail-row .rail-controls button:hover { background: var(--lime); border-color: var(--lime); color: #101216; }
+  .public-page .rail-row .rail-controls button:disabled { opacity: 0; pointer-events: none; }
+}
+.section-intro { color: #aab39f; font-size: 15px; line-height: 1.55; margin: 12px 0 0; max-width: 62ch; }
+.section-tools { display: grid; justify-items: end; align-content: end; gap: 2px; }
 .catalog-card .preview-toolbar:focus-within { z-index: 6; left: 8px; top: 8px; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; background: #090c07ee; border: 1px solid var(--lime); border-radius: 4px; padding: 4px; }
 @media (hover:none) {
-  .rail-edge { display: none !important; }
   .catalog-card { height: calc(var(--card-h) + 52px); }
   .catalog-card .preview-toolbar, .catalog-card .preview-toolbar:focus-within { position: static; width: auto; height: auto; margin: 0; clip-path: none; overflow: visible; padding: 8px 12px; border: 0; border-top: 1px solid #35402c; border-radius: 0; background: none; order: 3; }
   .catalog-card .preview-toolbar button { min-height: 36px; padding: 6px 12px; font-size: 13px; }

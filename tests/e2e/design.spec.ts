@@ -72,12 +72,12 @@ test("design: responsive discovery, sharing, filter recovery and screenshots", a
     await page.locator("header .nav-search").click();
     await expect(page.locator("#clip-search")).toBeFocused();
     await page.locator("#clip-search").fill("not-present-anywhere");
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page.getByRole("button", { name: "Search clips" }).click();
     await expect(
-      page.getByRole("heading", { name: "No clips match that selection." }),
+      page.getByRole("heading", { name: "No clips found." }),
     ).toBeVisible();
     await page.getByRole("link", { name: "Clear filters" }).click();
-    await expect(page.locator(".catalog-card")).toHaveCount(6);
+    await expect(page.locator(".catalog-card:not([hidden])")).toHaveCount(6);
     await ctx.close();
   }
 });

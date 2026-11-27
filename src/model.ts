@@ -45,6 +45,11 @@ export function str(v: unknown, max: number): string {
     throw Error("Texto vacío o demasiado largo");
   return v.trim();
 }
+/** Rejects placeholders such as "…" or "-": text needs at least one letter or digit. */
+export function meaningful(v: string): string {
+  if (!/[\p{L}\p{N}]/u.test(v)) throw Error("Texto sin contenido");
+  return v;
+}
 export function twitch(v: unknown): { id: string; url: string } {
   const raw = str(v, 300);
   const u = new URL(raw);
@@ -134,8 +139,8 @@ export function validate(v: any, publish = false): Edition {
       ...(c.duration !== undefined ? { duration: c.duration } : {}),
       streamer: optional(c.streamer),
       ...(optional(c.creator) ? { creator: optional(c.creator) } : {}),
-      title: str(c.title, 120),
-      text: str(c.text, 400),
+      title: meaningful(str(c.title, 120)),
+      text: meaningful(str(c.text, 400)),
       category: c.category,
     };
   });
